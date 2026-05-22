@@ -1,0 +1,2 @@
+model,layer,d_unmatched,d_matched,freq_inflation,ci_matched_lo,ci_matched_hi,n_intra,n_inter_unmatched,n_inter_matched
+smoketest/fakebert_d,12,10.272439846750508,10.067045599003484,0.20539424774702475,0.9769494667649269,0.9888020753860474,2040,2040,2037
