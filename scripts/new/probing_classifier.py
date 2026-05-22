@@ -115,6 +115,14 @@ def load_semantic_field_labels(chars: List[str]) -> Dict[str, str]:
 
 def main():
     df = load_radical_dataset()
+    if df.empty:
+        print("[skip] probing: empty dataset.")
+        pd.DataFrame(columns=[
+            "model", "layer", "pool", "iso", "probe",
+            "macro_f1", "accuracy", "balanced_accuracy",
+            "baseline", "n_classes", "n_samples",
+        ]).to_csv(RESULTS_DIR / "probing.csv", index=False)
+        return
     chars = df["char"].tolist()
     rad_col = "radical_number" if "radical_number" in df.columns else "radical"
     radical_y = df[rad_col].astype(int).to_numpy()
@@ -149,9 +157,11 @@ def main():
                     except FileNotFoundError:
                         continue
 
-                    # radical probe
+                    # radical probe — skip if too few samples for CV
                     Xr = X[keep_mask]
                     yr = radical_y[keep_mask]
+                    if len(yr) < 50 or len(set(yr)) < 2:
+                        continue
                     f1_r, acc_r, bal_r, base_r = cv_probe(Xr, yr)
                     rows.append({
                         "model": model_id, "layer": layer, "pool": pool, "iso": int(iso),

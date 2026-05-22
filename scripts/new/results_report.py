@@ -38,12 +38,12 @@ from radical_lib import RESULTS_DIR  # noqa: E402
 
 def maybe_read(name: str) -> Optional[pd.DataFrame]:
     p = RESULTS_DIR / name
-    if not p.exists():
+    if not p.exists() or p.stat().st_size == 0:
         return None
     try:
         df = pd.read_csv(p)
         return df if not df.empty else None
-    except Exception:
+    except (pd.errors.EmptyDataError, Exception):
         return None
 
 
@@ -94,10 +94,17 @@ def layerwise_analysis(out: list):
     if df is None:
         return
     iso = df[(df["pool"] == "char") & (df["iso"] == 1)].copy()
+    iso = iso.dropna(subset=["cohens_d"])
     if iso.empty:
+        out.append(section("2. Layer-wise interpretation"))
+        out.append("_no rows with valid cohens_d_\n")
         return
     out.append(section("2. Layer-wise interpretation"))
-    peak = iso.loc[iso.groupby("model")["cohens_d"].idxmax()][["model", "layer", "cohens_d"]]
+    peak_idx = iso.groupby("model")["cohens_d"].idxmax().dropna()
+    if peak_idx.empty:
+        out.append("_no peak rows_\n")
+        return
+    peak = iso.loc[peak_idx][["model", "layer", "cohens_d"]]
     peak = peak.rename(columns={"layer": "peak_layer", "cohens_d": "peak_d"})
     out.append("Peak layer per model:\n\n")
     out.append(render_table(peak.sort_values("peak_d", ascending=False),

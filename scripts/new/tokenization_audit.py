@@ -56,6 +56,13 @@ def main():
     out = pd.DataFrame(rows)
     out.to_csv(RESULTS_DIR / "tokenization_audit.csv", index=False)
 
+    if out.empty or "model" not in out.columns:
+        print("[warn] no tokenizer rows produced; skipping summary.")
+        pd.DataFrame(columns=[
+            "model", "n_chars", "n_single_token", "n_unk", "n_multitok", "coverage"
+        ]).to_csv(RESULTS_DIR / "tokenization_audit_summary.csv")
+        return
+
     summary = out.groupby("model").agg(
         n_chars=("char", "size"),
         n_single_token=("is_single", "sum"),

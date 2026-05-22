@@ -46,9 +46,24 @@ set_seed()
 
 
 def main():
-    layerwise = pd.read_csv(RESULTS_DIR / "layer_wise.csv")
+    layerwise_path = RESULTS_DIR / "layer_wise.csv"
+    pooled_path = RESULTS_DIR / "expanded_semantic_control_pooled.csv"
+    if not (layerwise_path.exists() and pooled_path.exists()):
+        print("[skip] glyph_comparison: missing layer_wise.csv or "
+              "expanded_semantic_control_pooled.csv — write empty file.")
+        pd.DataFrame(columns=[
+            "model_id", "model_class", "d_corpus", "p_corpus",
+            "ci_corpus_lo", "ci_corpus_hi", "d_semantic_ctrl",
+            "p_semantic_ctrl", "d_form_specific",
+        ]).to_csv(RESULTS_DIR / "glyph_comparison.csv", index=False)
+        return
+
+    layerwise = pd.read_csv(layerwise_path)
     layerwise = layerwise[(layerwise["pool"] == "char") & (layerwise["iso"] == 1)]
-    pooled = pd.read_csv(RESULTS_DIR / "expanded_semantic_control_pooled.csv")
+    try:
+        pooled = pd.read_csv(pooled_path)
+    except pd.errors.EmptyDataError:
+        pooled = pd.DataFrame()
 
     classes = {
         "bert-base-multilingual-cased":     "standard",

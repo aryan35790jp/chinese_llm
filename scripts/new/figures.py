@@ -83,10 +83,17 @@ ISO_DIR = CACHE_DIR / "embeddings_iso"
 
 def maybe_read(name: str) -> Optional[pd.DataFrame]:
     p = RESULTS_DIR / name
-    if not p.exists():
-        print(f"[skip] {name} not found")
+    if not p.exists() or p.stat().st_size == 0:
+        print(f"[skip] {name} not found or empty")
         return None
-    return pd.read_csv(p)
+    try:
+        df = pd.read_csv(p)
+    except pd.errors.EmptyDataError:
+        print(f"[skip] {name} is empty")
+        return None
+    if df.empty:
+        return None
+    return df
 
 
 # ── 1. centerpiece: layer-wise d ────────────────────────────────────────────

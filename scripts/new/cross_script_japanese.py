@@ -73,32 +73,52 @@ def load_iso_last_char(model_id: str) -> Tuple[np.ndarray, int]:
 
 
 JOYO_LOCAL = Path(__file__).resolve().parents[2] / "data" / "joyo_kanji.txt"
-JOYO_URL = "https://raw.githubusercontent.com/fasiha/joyo/master/joyo.txt"
 
 
 def joyo_kanji_set() -> set[str]:
-    """Load the 2,136 Joyo kanji from a local file; download once on first run.
+    """Load the Joyo kanji set.
 
-    Reviewer note: the previous fallback used "every char the Japanese
-    char-tokenizer accepts as a single token", which lets through almost
-    all 6,306 chars and makes the cross-script comparison meaningless
-    (we'd be testing the *same* chars under two tokenizers, not a
-    proper Japanese-restricted set). This stricter filter scopes the
-    comparison to a real Joyo subset.
+    Strategy (in order):
+      1. If `data/joyo_kanji.txt` exists, read it.
+      2. Otherwise, scan the local Unihan files for the kJoyoKanji field
+         (this is the official Unicode-curated Joyo flag — no network).
+      3. If neither works, return empty (caller falls back to tokenizer
+         coverage with a loud warning).
+
+    The previous version downloaded from a GitHub repo that has since been
+    moved/deleted; the Unihan-based approach is fully offline.
     """
     if JOYO_LOCAL.exists() and JOYO_LOCAL.stat().st_size > 1000:
         text = JOYO_LOCAL.read_text(encoding="utf-8")
         return set(c for c in text if 0x4E00 <= ord(c) <= 0x9FFF)
-    try:
-        import urllib.request
-        print(f"Downloading Joyo kanji list to {JOYO_LOCAL} …")
-        JOYO_LOCAL.parent.mkdir(parents=True, exist_ok=True)
-        urllib.request.urlretrieve(JOYO_URL, JOYO_LOCAL)
-        text = JOYO_LOCAL.read_text(encoding="utf-8")
-        return set(c for c in text if 0x4E00 <= ord(c) <= 0x9FFF)
-    except Exception as e:
-        print(f"[warn] could not download Joyo list: {e}")
-        return set()
+
+    # Try Unihan kJoyoKanji
+    unihan_dir = Path(__file__).resolve().parents[2] / "data" / "unihan"
+    if unihan_dir.exists():
+        joyo: set[str] = set()
+        for path in sorted(unihan_dir.glob("Unihan_*.txt")):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    for line in f:
+                        if not line.startswith("U+") or "kJoyoKanji" not in line:
+                            continue
+                        parts = line.strip().split("\t")
+                        if len(parts) < 3 or parts[1] != "kJoyoKanji":
+                            continue
+                        try:
+                            joyo.add(chr(int(parts[0][2:], 16)))
+                        except (ValueError, OverflowError):
+                            continue
+            except OSError:
+                continue
+        if joyo:
+            print(f"[joyo] loaded {len(joyo)} Joyo kanji from Unihan kJoyoKanji")
+            # Cache to disk for next run
+            JOYO_LOCAL.parent.mkdir(parents=True, exist_ok=True)
+            JOYO_LOCAL.write_text("".join(sorted(joyo)), encoding="utf-8")
+            return joyo
+
+    return set()
 
 
 def japanese_chars_via_tokenizer(chars: List[str]) -> set[str]:
@@ -166,8 +186,12 @@ def main():
               "data/joyo_kanji.txt for a stricter subset.")
         kanji = japanese_chars_via_tokenizer(chars)
     if not kanji:
-        print("[fatal] could not assemble a Japanese kanji subset.")
-        sys.exit(1)
+        print("[warn] could not assemble a Japanese kanji subset; writing empty CSV.")
+        pd.DataFrame(columns=[
+            "model", "model_id", "language", "n_chars", "n_intra", "n_inter",
+            "intra_mean", "inter_mean", "delta", "cohens_d", "p_perm",
+        ]).to_csv(RESULTS_DIR / "cross_script_japanese.csv", index=False)
+        return
     kanji_in_dataset = [c for c in chars if c in kanji]
     print(f"Japanese-relevant kanji in dataset: {len(kanji_in_dataset)} "
           f"(of {len(kanji)} Joyo)")

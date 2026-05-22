@@ -31,56 +31,74 @@ from scripts.new.config import MODELS, MIN_RADICAL_SIZE, chinese_models  # noqa:
 set_seed()
 
 UNIHAN_IRG = DATA_DIR / "unihan" / "Unihan_IRGSources.txt"
-UNIHAN_DICT = DATA_DIR / "unihan" / "Unihan_DictionaryLikeData.txt"
+UNIHAN_DIR = DATA_DIR / "unihan"
 
 
 # ── 1. parse Unihan ─────────────────────────────────────────────────────────
+def _scan_unihan_field(field_name: str) -> dict:
+    """Robust Unihan field reader.
+
+    Some fields (notably kTotalStrokes) have moved between files across
+    Unicode releases. We scan every Unihan_*.txt file we can find and
+    return the first value seen per character.
+
+    Returns {char: raw_value_string} where the raw value is whatever
+    appears after the field name (callers parse it further).
+    """
+    out: dict = {}
+    if not UNIHAN_DIR.exists():
+        return out
+    for path in sorted(UNIHAN_DIR.glob("Unihan_*.txt")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    if not line.startswith("U+") or field_name not in line:
+                        continue
+                    parts = line.strip().split("\t")
+                    if len(parts) < 3 or parts[1] != field_name:
+                        continue
+                    try:
+                        ch = chr(int(parts[0][2:], 16))
+                    except (ValueError, OverflowError):
+                        continue
+                    if ch not in out:
+                        out[ch] = parts[2]
+        except OSError:
+            continue
+    return out
+
+
 def parse_kRSUnicode() -> dict:
     """Map char → kangxi radical number from kRSUnicode (e.g. '85.5' → 85)."""
     radical_map: dict = {}
-    with open(UNIHAN_IRG, encoding="utf-8") as f:
-        for line in f:
-            if not line.startswith("U+") or "kRSUnicode" not in line:
-                continue
-            parts = line.strip().split("\t")
-            if len(parts) < 3:
-                continue
-            codepoint = parts[0]
-            radical_info = parts[2]
-            try:
-                ch = chr(int(codepoint[2:], 16))
-            except ValueError:
-                continue
-            radical = radical_info.split(".")[0].rstrip("'")
-            try:
-                radical_map.setdefault(ch, int(radical))
-            except ValueError:
-                continue
+    raw = _scan_unihan_field("kRSUnicode")
+    for ch, val in raw.items():
+        head = val.split()[0] if val else ""
+        rad = head.split(".")[0].rstrip("'")
+        try:
+            radical_map[ch] = int(rad)
+        except ValueError:
+            continue
     return radical_map
 
 
 def parse_stroke_counts() -> dict:
-    """Map char → total stroke count from kTotalStrokes."""
-    strokes: dict = {}
-    if not UNIHAN_DICT.exists():
-        # kTotalStrokes lives in DictionaryLikeData but Unihan layout has shifted
-        # over the years — try IRG too as a fallback.
-        return strokes
-    for path in (UNIHAN_DICT,):
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                if not line.startswith("U+") or "kTotalStrokes" not in line:
-                    continue
-                parts = line.strip().split("\t")
-                if len(parts) < 3:
-                    continue
-                try:
-                    ch = chr(int(parts[0][2:], 16))
-                    val = parts[2].split()[0]  # may be e.g. "9 8"
-                    strokes[ch] = int(val)
-                except ValueError:
-                    continue
-    return strokes
+    """Map char → total stroke count from kTotalStrokes.
+
+    Falls back to deriving strokes from kRSUnicode (radical_strokes +
+    residual_strokes ≈ total) if kTotalStrokes isn't populated.
+    """
+    raw = _scan_unihan_field("kTotalStrokes")
+    out: dict = {}
+    for ch, val in raw.items():
+        if not val:
+            continue
+        try:
+            # field can be "9 8" (Traditional vs Simplified) — take first
+            out[ch] = int(val.split()[0])
+        except ValueError:
+            continue
+    return out
 
 
 # Kangxi radical number → its canonical visual form (the actual radical char).
@@ -100,10 +118,12 @@ def is_single_token(tokenizer, ch: str) -> bool:
 
 
 def build_coverage_table(chars: list[str]) -> pd.DataFrame:
-    """For every Chinese-text model, mark which chars tokenize to a single token.
+    """Mark which chars tokenize to a single token in each Chinese-text model.
 
-    We require single-token coverage in *all* of the standard Chinese models
-    (not the glyph-aware one and not Japanese — those are handled separately).
+    *Reporting* is per-model — used by `tokenization_audit.py`. The dataset
+    *filter* uses only Chinese-BERT (see `dataset_filter` below) so the
+    final character set matches the original two-model paper for
+    reproducibility.
     """
     targets = [
         m for m in chinese_models()
@@ -120,6 +140,20 @@ def build_coverage_table(chars: list[str]) -> pd.DataFrame:
             continue
         rows[spec.label] = [is_single_token(tok, c) for c in chars]
     return pd.DataFrame(rows, index=chars)
+
+
+def dataset_filter(chars: list[str]) -> list[str]:
+    """Apply the canonical dataset filter.
+
+    Use Chinese-BERT (whole-word-masking) only — this matches the original
+    two-model paper's 6,306-character set. Stricter "intersect across all
+    models" filters cut the dataset to ~30 chars because XLM-R, ERNIE etc.
+    use SentencePiece-style tokenizers that split most CJK chars.
+    """
+    tok = AutoTokenizer.from_pretrained("hfl/chinese-bert-wwm-ext")
+    kept = [c for c in chars if is_single_token(tok, c)]
+    print(f"  chars single-token in Chinese-BERT: {len(kept)} (of {len(chars)})")
+    return kept
 
 
 # ── 3. main ─────────────────────────────────────────────────────────────────
@@ -141,13 +175,13 @@ def main():
 
     print("Computing tokenizer coverage across Chinese models...")
     coverage = build_coverage_table(candidates)
-    if coverage.empty:
-        print("[fatal] no tokenizers loaded. Check internet / cache.")
-        sys.exit(1)
-    keep_mask = coverage.all(axis=1)
-    kept = coverage.index[keep_mask].tolist()
-    print(f"  chars single-token in *all* configured Chinese models: {len(kept)}")
     coverage.to_csv(DATA_DIR / "tokenization_coverage.csv")
+
+    print("Applying canonical dataset filter (Chinese-BERT vocab) …")
+    kept = dataset_filter(candidates)
+    if not kept:
+        print("[fatal] no chars survived the filter. Check tokenizer download.")
+        sys.exit(1)
 
     # frequency proxy: rank in Chinese-BERT vocab (lower rank = more frequent)
     bert_tok = AutoTokenizer.from_pretrained("hfl/chinese-bert-wwm-ext")
