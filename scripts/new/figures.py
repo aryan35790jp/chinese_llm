@@ -363,6 +363,22 @@ def fig_pca_umap_projections():
     save_fig(fig, "fig_pca_umap_projections")
 
 
+# ── 11. radical cloze (downstream LM probe) ─────────────────────────────────
+def fig_radical_cloze():
+    import matplotlib.pyplot as plt
+    df = maybe_read("radical_cloze_summary.csv")
+    if df is None or df.empty:
+        return
+    fig, ax = plt.subplots(figsize=(7, 4))
+    df = df.sort_values("mean_delta")
+    colors = ["#dc2626" if f == "causal" else "#2563eb" for f in df["family"]]
+    ax.barh(df["model"], df["mean_delta"], color=colors, edgecolor="black", linewidth=0.5)
+    ax.axvline(0, color="black", linewidth=0.6, linestyle=":")
+    ax.set_xlabel("Mean Δ log P  (target − distractor)")
+    ax.set_title("Radical cloze probe: do models rank target-radical chars higher?")
+    save_fig(fig, "fig_radical_cloze")
+
+
 def main():
     fig_layer_wise_d()
     fig_layer_wise_rsa()
@@ -374,6 +390,7 @@ def main():
     fig_downstream_correlation()
     fig_variance_decomposition()
     fig_orthographic_arithmetic()
+    fig_radical_cloze()
     fig_pca_umap_projections()
     print("\nfigures done")
 

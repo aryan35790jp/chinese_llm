@@ -296,6 +296,19 @@ def anomalies(out: list):
         out.append("None detected.\n")
 
 
+def cloze(out: list):
+    df = maybe_read("radical_cloze_summary.csv")
+    out.append(section("13. Radical cloze probe (LM behavior)"))
+    if df is None:
+        out.append("_missing — run radical_cloze_probe.py_\n")
+        return
+    cols = ["model", "family", "mean_delta", "mean_top1_rate", "mean_mrr", "n_fields"]
+    out.append(render_table(df.sort_values("mean_delta", ascending=False), cols))
+    out.append("\n**Decision prompt:** if `mean_delta` (target log-prob − distractor log-prob) "
+               "is large for radical-aware models and small/negative for radical-naive ones, "
+               "the geometric findings translate into observable LM behavior.\n")
+
+
 def main():
     out = []
     blockers = []
@@ -315,6 +328,7 @@ def main():
     probing(out)
     orth_arith(out)
     anomalies(out)
+    cloze(out)
 
     if blockers:
         out.append(section("BLOCKERS"))

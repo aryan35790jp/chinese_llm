@@ -1,0 +1,3 @@
+model,model_id,layer,d_random_init,p_perm,intra_mean,inter_mean,n_intra,n_inter
+Chinese-BERT (random init),hfl/chinese-bert-wwm-ext,12,-0.05646316837926616,0.986013986013986,-0.0012333998464389778,0.0034006243435339366,3400,3400
+XLM-R-base (random init),xlm-roberta-base,12,-0.028599981483637064,0.8821178821178821,-0.0002795429101196052,0.002507925964118327,3400,3400

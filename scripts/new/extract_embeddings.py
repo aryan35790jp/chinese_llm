@@ -58,10 +58,12 @@ from radical_lib.embeddings import model_dir  # noqa: E402
 from scripts.new.config import (  # noqa: E402
     INCLUDE_LAYER_0,
     LAYER_SAMPLE_COUNT_FAST,
+    LAYER_OVERRIDE_LABELS,
     FAST_BATCH_SIZE,
     FULL_BATCH_SIZE,
     FAST_DTYPE,
     get_active_models,
+    batch_size_for,
 )
 
 set_seed()
@@ -72,16 +74,21 @@ def _is_fast_mode() -> bool:
     return os.environ.get("RADICAL_FAST", "").strip() in ("1", "true", "yes")
 
 
-def _select_layers(n_layers: int) -> List[int]:
+def _select_layers(n_layers: int, model_label: str | None = None) -> List[int]:
     """Pick which layers to extract.
 
     Full mode: every layer (0..n_layers if INCLUDE_LAYER_0 else 1..n_layers).
-    Fast mode: ~5 layers evenly spaced including last and (optionally) 0.
+    Fast mode: ~5 layers evenly spaced including endpoints, EXCEPT for
+        models in LAYER_OVERRIDE_LABELS — those still get every layer even
+        in fast mode (used for the high-resolution centerpiece figure).
     """
     full = list(range(0 if INCLUDE_LAYER_0 else 1, n_layers + 1))
-    if not _is_fast_mode() or len(full) <= LAYER_SAMPLE_COUNT_FAST:
+    if not _is_fast_mode():
         return full
-    # Evenly spaced indices into `full`, always including endpoints
+    if model_label and model_label in LAYER_OVERRIDE_LABELS:
+        return full
+    if len(full) <= LAYER_SAMPLE_COUNT_FAST:
+        return full
     idx = np.linspace(0, len(full) - 1, LAYER_SAMPLE_COUNT_FAST).round().astype(int)
     return [full[i] for i in sorted(set(idx))]
 
@@ -97,9 +104,9 @@ def _select_dtype():
     return torch.float16
 
 
-def already_cached(model_id: str, n_layers: int) -> bool:
-    """Skip a model if all expected layer files exist (uses fast/full layer set)."""
-    layers = _select_layers(n_layers)
+def already_cached(model_id: str, n_layers: int, model_label: str | None = None) -> bool:
+    """Skip a model if all expected layer files exist."""
+    layers = _select_layers(n_layers, model_label=model_label)
     for L in layers:
         for pool in ("mean", "char", "cls"):
             if not embedding_path(model_id, L, pool).exists():
@@ -158,11 +165,15 @@ def extract_for_model(spec, chars: List[str], device: torch.device,
                       batch_size: int | None = None) -> None:
     """Extract and cache the configured layers × all pools for a single model.
 
-    In RADICAL_FAST=1 mode this samples ~5 layers and uses bf16 inference,
-    making the run ~12× faster than the full extraction.
+    Per-model batch size respects VRAM constraints on T4.
+    Layer set respects fast/full mode and per-model overrides.
     """
     if batch_size is None:
-        batch_size = FAST_BATCH_SIZE if _is_fast_mode() else FULL_BATCH_SIZE
+        if _is_fast_mode():
+            batch_size = batch_size_for(spec, default_fast=FAST_BATCH_SIZE,
+                                         default_full=FULL_BATCH_SIZE)
+        else:
+            batch_size = FULL_BATCH_SIZE
     print(f"\n=== {spec.label} ({spec.hf_id}) ===  fast={_is_fast_mode()}  bs={batch_size}")
     try:
         tokenizer = AutoTokenizer.from_pretrained(
@@ -186,10 +197,10 @@ def extract_for_model(spec, chars: List[str], device: torch.device,
     sample = tokenizer("测", return_tensors="pt").to(device)
     out = model(**sample)
     n_layers = len(out.hidden_states) - 1  # excluding embedding layer
-    layer_range = _select_layers(n_layers)
+    layer_range = _select_layers(n_layers, model_label=spec.label)
     print(f"  hidden states available: {n_layers + 1}; extracting layers: {layer_range}")
 
-    if already_cached(spec.hf_id, n_layers):
+    if already_cached(spec.hf_id, n_layers, model_label=spec.label):
         print("  all layers cached — skipping")
         del model
         torch.cuda.empty_cache() if torch.cuda.is_available() else None

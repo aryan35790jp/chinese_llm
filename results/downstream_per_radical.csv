@@ -1,0 +1,16 @@
+model,radical,n_pairs,mean_human_score,mean_model_cos
+xlm-roberta-base,75,5,7.7,0.23862797021865845
+xlm-roberta-base,85,3,7.666666666666667,0.2574303597211838
+xlm-roberta-base,109,3,7.5,0.141278773235778
+bert-base-multilingual-cased,75,5,7.7,0.3396972969174385
+bert-base-multilingual-cased,85,3,7.666666666666667,0.3207082897424698
+bert-base-multilingual-cased,109,3,7.5,0.1852785994609197
+cl-tohoku/bert-base-japanese-char-v3,75,5,7.7,0.2448990721255541
+cl-tohoku/bert-base-japanese-char-v3,85,3,7.666666666666667,0.2625371764103572
+cl-tohoku/bert-base-japanese-char-v3,109,3,7.5,0.21359959244728088
+glyph_only/resnet18,75,5,7.7,0.25540816243737935
+glyph_only/resnet18,85,3,7.666666666666667,0.4281413753827413
+glyph_only/resnet18,109,3,7.5,0.08810374637444814
+hfl/chinese-bert-wwm-ext,75,5,7.7,0.31521751582622526
+hfl/chinese-bert-wwm-ext,85,3,7.666666666666667,0.2823656251033147
+hfl/chinese-bert-wwm-ext,109,3,7.5,0.24167643735806146
