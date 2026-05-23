@@ -33,6 +33,7 @@ Depends on: extract_embeddings.py, isotropy_correction.py,
 """
 from __future__ import annotations
 import itertools
+import os
 import random
 import sys
 from pathlib import Path
@@ -110,7 +111,10 @@ def make_size_matched_partition(
     return partition
 
 
-def main(B: int = B_DEFAULT):
+def main(B: int = None):
+    if B is None:
+        # honour RADICAL_PSEUDO_B for fast Colab runs (e.g. =100 cuts time in half)
+        B = int(os.environ.get("RADICAL_PSEUDO_B", B_DEFAULT))
     df = load_radical_dataset()
     chars = df["char"].tolist()
     n = len(chars)

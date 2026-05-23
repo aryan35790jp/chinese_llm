@@ -1,0 +1,27 @@
+# ── DIAGNOSTIC ONLY — paste into a fresh cell, tells us if backup is reachable ──
+from google.colab import drive
+drive.mount('/content/drive', force_remount=False)
+
+import pathlib, subprocess
+B = pathlib.Path('/content/drive/MyDrive')
+print('MyDrive contents (top level):')
+for p in sorted(B.iterdir()):
+    if p.is_dir():
+        print('  [dir]', p.name)
+    else:
+        print('       ', p.name)
+
+print()
+target = B / 'radical_llm_backup'
+print('radical_llm_backup exists:', target.exists())
+if target.exists():
+    for sub in ['embeddings', 'embeddings_iso']:
+        p = target / sub
+        if p.exists():
+            models = sorted([x.name for x in p.iterdir() if x.is_dir()])
+            sz = subprocess.check_output(['du','-sh',str(p)]).decode().split()[0]
+            print(f'  {sub}/ ({sz}, {len(models)} models):')
+            for m in models:
+                print('    -', m)
+        else:
+            print(f'  {sub}/ MISSING')
