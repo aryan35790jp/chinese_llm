@@ -51,6 +51,7 @@ STEPS = [
     ("activation_patch",   "scripts.new.activation_patching",        "Activation patching (geometric)",    "results/activation_patching.csv",  False, ["cache/embeddings_iso"]),
     ("sentential",         "scripts.new.sentential_context",         "Sentential context (heavy)",         "results/sentential_cohesion.csv",  False, ["cache/embeddings"]),
     ("downstream",         "scripts.new.downstream_validation",      "Downstream validation",              "results/downstream_validation.csv", False, ["cache/embeddings_iso"]),
+    ("nonparam",           "scripts.new.nonparametric_stats",        "Non-parametric stats (Wendt's r, char-bootstrap)",   "results/nonparametric_cohesion.csv", True, ["cache/embeddings_iso"]),
     ("cloze",              "scripts.new.radical_cloze_probe",         "Radical cloze probe",                "results/radical_cloze_summary.csv", False, ["data/radical_dataset.csv"]),
     ("figures",            "scripts.new.figures",                    "All paper figures",                  "figures/fig_layer_wise_d.png",     True,  ["results/layer_wise.csv"]),
     ("report",             "scripts.new.results_report",             "Auto-generated analysis report",     "results/_REPORT.md",               True,  ["results/layer_wise.csv"]),

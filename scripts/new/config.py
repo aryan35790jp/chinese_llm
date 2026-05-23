@@ -96,6 +96,8 @@ def scaling_models() -> List[ModelSpec]:
 FAST_MODEL_LABELS = {
     "mBERT",
     "Chinese-BERT",
+    "MacBERT",            # ADDED for n>=4 Chinese-specialized
+    "ERNIE-3.0",          # ADDED — Chinese-specific, with knowledge prior
     "XLM-R-base",
     "JP-BERT-char",
     "Qwen2.5-1.5B",

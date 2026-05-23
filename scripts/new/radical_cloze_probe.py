@@ -82,98 +82,276 @@ set_seed()
 #   distractors     — characters that DO NOT have target_radical but are
 #                     plausible single-char nouns (could fit syntactically)
 TRIALS: List[Dict] = [
+    # ── nature: water (氵 vs non-氵 water-related) ─────────────────────────
     {
         "field": "water",
-        "target_radical": 85,  # 氵
+        "target_radical": 85,
         "contexts": [
-            "他在__里游泳。",          # He swims in the __
-            "船在__上航行。",          # The ship sails on the __
-            "鱼在__里游来游去。",      # Fish swim in the __
-            "下了大雨,__水涨了。",     # After heavy rain, the __ rose
-            "口渴的时候要喝__。",      # When thirsty, drink __
+            "他在__里游泳。",
+            "船在__上航行。",
+            "鱼在__里游来游去。",
+            "下了大雨,__水涨了。",
+            "口渴的时候要喝__。",
+            "桥下有一条__。",
+            "我看见远处的__面在闪光。",
         ],
-        "targets": ["河", "江", "湖", "海", "溪"],
-        "distractors": ["山", "林", "路", "屋", "门"],
+        "targets":     ["河", "江", "湖", "海", "溪", "潭", "渠"],
+        "distractors": ["山", "林", "路", "屋", "门", "石", "木"],
     },
+    # ── nature: fire (火 vs non-火 heat-related) ──────────────────────────
     {
         "field": "fire",
-        "target_radical": 86,  # 火
+        "target_radical": 86,
         "contexts": [
-            "厨房的__很大。",          # The kitchen's __ is big
-            "森林里着了__。",           # A __ broke out in the forest
-            "他用__烤肉。",            # He grilled meat with __
-            "请把__关小一点。",        # Please turn the __ down
+            "厨房的__很大。",
+            "森林里着了__。",
+            "他用__烤肉。",
+            "请把__关小一点。",
+            "冬天我们围着__取暖。",
+            "炉子里的__熊熊燃烧。",
         ],
-        "targets": ["烟", "炎", "焰", "灯", "炒"],
-        "distractors": ["水", "木", "石", "土", "金"],
+        "targets":     ["烟", "炎", "焰", "灯", "炒", "炮", "烈"],
+        "distractors": ["水", "木", "石", "土", "金", "纸", "布"],
     },
+    # ── nature: metal (钅 vs non-钅 material-related) ─────────────────────
     {
         "field": "metal",
-        "target_radical": 167,  # 金/钅
+        "target_radical": 167,
         "contexts": [
-            "这把__很锋利。",          # This __ is sharp
-            "工人用__敲钉子。",        # The worker hits nails with a __
-            "古代用__做兵器。",        # In ancient times, weapons were made of __
-            "她戴着__项链。",          # She wears a __ necklace
+            "这把__很锋利。",
+            "工人用__敲钉子。",
+            "古代用__做兵器。",
+            "她戴着__项链。",
+            "桥是用__造的。",
+            "锅是__做的。",
         ],
-        "targets": ["铁", "铜", "钢", "锤", "银"],
-        "distractors": ["木", "石", "布", "纸", "玉"],
+        "targets":     ["铁", "铜", "钢", "锤", "银", "钉", "锁"],
+        "distractors": ["木", "石", "布", "纸", "玉", "竹", "土"],
     },
+    # ── nature: tree/plant (木 vs non-木 plant-related) ───────────────────
     {
         "field": "tree",
-        "target_radical": 75,  # 木
+        "target_radical": 75,
         "contexts": [
-            "院子里有一棵大__。",      # There's a big __ in the yard
-            "秋天__叶变黄了。",         # In autumn the __ leaves turn yellow
-            "他爬上了那棵__。",        # He climbed that __
-            "用__做家具。",            # Make furniture from __
+            "院子里有一棵大__。",
+            "秋天__叶变黄了。",
+            "他爬上了那棵__。",
+            "用__做家具。",
+            "山上长满了__。",
+            "公园里种着__。",
         ],
-        "targets": ["树", "松", "柳", "桃", "梅"],
-        "distractors": ["山", "河", "鸟", "云", "鱼"],
+        "targets":     ["树", "松", "柳", "桃", "梅", "柏", "枫"],
+        "distractors": ["山", "河", "鸟", "云", "鱼", "石", "土"],
     },
+    # ── nature: mountain (山 vs non-山 terrain) ───────────────────────────
+    {
+        "field": "mountain",
+        "target_radical": 46,
+        "contexts": [
+            "远处有一座__。",
+            "我们爬上了__。",
+            "__顶上有积雪。",
+            "云雾缭绕在__间。",
+        ],
+        "targets":     ["峰", "岭", "崖", "岗", "岛", "岳"],
+        "distractors": ["河", "湖", "树", "草", "路", "桥"],
+    },
+    # ── nature: stone (石 vs non-石) ──────────────────────────────────────
+    {
+        "field": "stone",
+        "target_radical": 112,
+        "contexts": [
+            "路边有一块大__。",
+            "工人在搬__。",
+            "墙是用__砌的。",
+            "海边有许多小__。",
+        ],
+        "targets":     ["砖", "砂", "硬", "碎", "碰", "磨"],
+        "distractors": ["木", "草", "水", "云", "风", "雪"],
+    },
+    # ── animals: bird (鸟 vs non-鸟 / 隹 birds) ───────────────────────────
     {
         "field": "bird",
-        "target_radical": 196,  # 鸟
+        "target_radical": 196,
         "contexts": [
-            "天上飞着一只__。",        # A __ flies in the sky
-            "他养了一只__。",          # He keeps a pet __
-            "树上停着__。",            # A __ rests on the tree
+            "天上飞着一只__。",
+            "他养了一只__。",
+            "树上停着__。",
+            "公园里有许多__。",
+            "__在天上飞翔。",
         ],
-        "targets": ["鸽", "雀", "鹰", "鹅", "鸭"],
-        "distractors": ["猫", "鱼", "羊", "马", "蛇"],
+        "targets":     ["鸽", "雀", "鹰", "鹅", "鸭", "鹊", "鹂"],
+        "distractors": ["猫", "鱼", "羊", "马", "蛇", "牛", "狗"],
     },
+    # ── animals: fish (鱼 vs non-鱼 sea creatures) ────────────────────────
     {
         "field": "fish",
-        "target_radical": 195,  # 鱼
+        "target_radical": 195,
         "contexts": [
-            "渔夫钓到了一条__。",      # The fisherman caught a __
-            "海里有很多__。",          # There are many __ in the sea
-            "我喜欢吃__。",            # I like to eat __
+            "渔夫钓到了一条__。",
+            "海里有很多__。",
+            "我喜欢吃__。",
+            "市场上卖各种__。",
         ],
-        "targets": ["鲤", "鲨", "鲸", "鳕", "鳗"],
-        "distractors": ["猫", "鸟", "牛", "羊", "蛇"],
+        "targets":     ["鲤", "鲨", "鲸", "鳕", "鳗", "鲍", "鲫"],
+        "distractors": ["猫", "鸟", "牛", "羊", "蛇", "马", "狗"],
     },
+    # ── animals: insect (虫 vs non-虫) ────────────────────────────────────
     {
         "field": "insect",
-        "target_radical": 142,  # 虫
+        "target_radical": 142,
         "contexts": [
-            "草地上有许多__。",        # There are many __ in the grass
-            "夏天最讨厌__。",          # In summer the most annoying are __
-            "这只__在墙上。",          # This __ is on the wall
+            "草地上有许多__。",
+            "夏天最讨厌__。",
+            "这只__在墙上。",
+            "花上飞着小__。",
         ],
-        "targets": ["蚊", "蝇", "蜂", "蚁", "蝶"],
-        "distractors": ["猫", "狗", "鱼", "鸟", "马"],
+        "targets":     ["蚊", "蝇", "蜂", "蚁", "蝶", "蛾", "蜻"],
+        "distractors": ["猫", "狗", "鱼", "鸟", "马", "羊", "牛"],
     },
+    # ── animals: wild mammal (犭 dog/animal radical) ──────────────────────
+    {
+        "field": "wild_animal",
+        "target_radical": 94,
+        "contexts": [
+            "森林里跑出来一只__。",
+            "动物园里有__。",
+            "猎人遇见了一头__。",
+            "电视里播着__的纪录片。",
+        ],
+        "targets":     ["狼", "狐", "狮", "猴", "猪", "猫", "狗"],
+        "distractors": ["鸟", "鱼", "蛇", "羊", "牛", "马", "鸡"],
+    },
+    # ── people: kinship ───────────────────────────────────────────────────
+    {
+        "field": "kinship",
+        "target_radical": 38,  # 女
+        "contexts": [
+            "我的__很慈祥。",
+            "她有一个__。",
+            "全家人都来了,包括我__。",
+            "__给我做了好吃的。",
+        ],
+        "targets":     ["妈", "姐", "妹", "姑", "婶", "嫂", "奶"],
+        "distractors": ["父", "兄", "叔", "伯", "爷", "弟", "孙"],
+    },
+    # ── speech (讠 vs non-讠 speech-acts) ─────────────────────────────────
     {
         "field": "speech",
-        "target_radical": 149,  # 言/讠
+        "target_radical": 149,
         "contexts": [
-            "请你__清楚一点。",        # Please __ more clearly
-            "他对我__了一句话。",      # He __ed a sentence to me
-            "老师在__课文。",          # The teacher is __ing the text
+            "请你__清楚一点。",
+            "他对我__了一句话。",
+            "老师在__课文。",
+            "她大声__着。",
+            "同学们正在__问题。",
         ],
-        "targets": ["说", "讲", "谈", "诉", "讨"],
-        "distractors": ["看", "走", "吃", "睡", "想"],
+        "targets":     ["说", "讲", "谈", "诉", "讨", "诵", "议"],
+        "distractors": ["看", "走", "吃", "睡", "想", "读", "写"],
+    },
+    # ── perception: vision (目 vs non-目) ────────────────────────────────
+    {
+        "field": "vision",
+        "target_radical": 109,
+        "contexts": [
+            "他盯着我__了一会。",
+            "她在__着远方。",
+            "孩子__着糖果。",
+            "我__不见前面的路。",
+        ],
+        "targets":     ["瞪", "瞧", "瞄", "盯", "睁", "瞅"],
+        "distractors": ["听", "说", "走", "笑", "哭", "想"],
+    },
+    # ── body: organ (月/肉 vs non-月) ─────────────────────────────────────
+    {
+        "field": "body_organ",
+        "target_radical": 130,
+        "contexts": [
+            "医生说他__不好。",
+            "运动员的__很强壮。",
+            "饭后__里很饱。",
+            "__里疼。",
+        ],
+        "targets":     ["肝", "肺", "胃", "肠", "肾", "胆", "胸"],
+        "distractors": ["脑", "心", "骨", "血", "皮", "毛", "齿"],
+    },
+    # ── emotion (心/忄 vs non-心) ─────────────────────────────────────────
+    {
+        "field": "emotion",
+        "target_radical": 61,
+        "contexts": [
+            "我感到很__。",
+            "他听了非常__。",
+            "她__得说不出话。",
+            "__使他不能入睡。",
+        ],
+        "targets":     ["怀", "悦", "愁", "怕", "恐", "悲", "怒"],
+        "distractors": ["看", "说", "走", "吃", "笑", "哭", "想"],
+    },
+    # ── time: sun-related (日 vs non-日) ──────────────────────────────────
+    {
+        "field": "time_sun",
+        "target_radical": 72,
+        "contexts": [
+            "今天__光很好。",
+            "明__我去上学。",
+            "__出__落。",
+            "她每__早起。",
+        ],
+        "targets":     ["晴", "晚", "早", "昨", "明", "时", "晨"],
+        "distractors": ["月", "云", "雨", "雪", "风", "山", "河"],
+    },
+    # ── weather (雨 vs non-雨) ───────────────────────────────────────────
+    {
+        "field": "weather",
+        "target_radical": 173,
+        "contexts": [
+            "今天下__了。",
+            "__后空气清新。",
+            "冬天会下__。",
+            "天上有__。",
+        ],
+        "targets":     ["雷", "电", "雪", "霜", "露", "雾", "霞"],
+        "distractors": ["山", "河", "树", "石", "鸟", "鱼", "草"],
+    },
+    # ── grass/plant (艹 vs non-艹) ────────────────────────────────────────
+    {
+        "field": "grass",
+        "target_radical": 140,
+        "contexts": [
+            "院子里长满了__。",
+            "她在花园里种__。",
+            "__里开着小花。",
+            "牛吃__。",
+        ],
+        "targets":     ["苗", "芽", "花", "莲", "蓬", "茎", "蕊"],
+        "distractors": ["树", "木", "石", "山", "鸟", "鱼", "云"],
+    },
+    # ── tools: knife/cut (刀/刂) ─────────────────────────────────────────
+    {
+        "field": "knife",
+        "target_radical": 18,
+        "contexts": [
+            "他用__切菜。",
+            "工匠__着木头。",
+            "请把__递给我。",
+            "刺客拔出了__。",
+        ],
+        "targets":     ["刀", "剑", "削", "划", "刺", "切", "剪"],
+        "distractors": ["碗", "桌", "杯", "壶", "盘", "勺", "锅"],
+    },
+    # ── walking/movement (辶 vs non-辶) ──────────────────────────────────
+    {
+        "field": "movement",
+        "target_radical": 162,
+        "contexts": [
+            "他正在__回家。",
+            "我们一起__街。",
+            "她__得很快。",
+            "请你__过来。",
+        ],
+        "targets":     ["走", "进", "退", "返", "迎", "送", "追"],
+        "distractors": ["看", "说", "想", "笑", "哭", "睡", "吃"],
     },
 ]
 
