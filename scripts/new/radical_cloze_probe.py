@@ -356,8 +356,31 @@ TRIALS: List[Dict] = [
 ]
 
 
+# ── trial loader ────────────────────────────────────────────────────────────
+def _load_trials() -> List[Dict]:
+    """Load cloze trials. Prefer the procedurally generated
+    `data/cloze_items.json` over the inline TRIALS list, because the
+    procedural version eliminates manual selection bias.
+    See `scripts/new/cloze_procedural.py` for the construction protocol.
+    """
+    import json
+    json_path = Path(__file__).resolve().parents[2] / "data" / "cloze_items.json"
+    if json_path.exists():
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            if data:
+                print(f"[cloze] using procedural items from {json_path.name} "
+                      f"({len(data)} fields)")
+                return data
+        except Exception as e:
+            print(f"[cloze] could not load {json_path}: {e}")
+    print(f"[cloze] using inline hand-curated TRIALS ({len(TRIALS)} fields)")
+    return TRIALS
+
+
 # ── 2. encoder MLM scoring ──────────────────────────────────────────────────
-def score_with_mlm(model_id: str, trust_remote_code: bool = False) -> List[Dict]:
+def score_with_mlm(model_id: str, trials: List[Dict],
+                    trust_remote_code: bool = False) -> List[Dict]:
     """For each trial, replace the slot with [MASK] and read off log P(token)
     for every target and distractor.
     """
@@ -382,7 +405,7 @@ def score_with_mlm(model_id: str, trust_remote_code: bool = False) -> List[Dict]
 
     rows = []
     with torch.no_grad():
-        for trial in TRIALS:
+        for trial in trials:
             target_logprobs: List[float] = []
             distractor_logprobs: List[float] = []
             target_top1_wins = 0
@@ -403,7 +426,6 @@ def score_with_mlm(model_id: str, trust_remote_code: bool = False) -> List[Dict]
                 # Per-trial token IDs for targets and distractors
                 t_ids = [tokenizer.convert_tokens_to_ids(c) for c in trial["targets"]]
                 d_ids = [tokenizer.convert_tokens_to_ids(c) for c in trial["distractors"]]
-                # Skip chars the tokenizer doesn't have
                 t_pairs = [(c, i) for c, i in zip(trial["targets"], t_ids)
                            if i is not None and i != tokenizer.unk_token_id]
                 d_pairs = [(c, i) for c, i in zip(trial["distractors"], d_ids)
@@ -419,7 +441,6 @@ def score_with_mlm(model_id: str, trust_remote_code: bool = False) -> List[Dict]
                 if max(t_lp) > max(d_lp):
                     target_top1_wins += 1
 
-                # MRR over target ∪ distractor
                 pool = sorted(t_pairs + d_pairs, key=lambda p: -float(logp[p[1]]))
                 rank_of_first_target = next(
                     (k + 1 for k, p in enumerate(pool) if p in t_pairs), len(pool)
@@ -449,7 +470,8 @@ def score_with_mlm(model_id: str, trust_remote_code: bool = False) -> List[Dict]
 
 
 # ── 3. decoder LM scoring (Qwen) ────────────────────────────────────────────
-def score_with_causal_lm(model_id: str, trust_remote_code: bool = False) -> List[Dict]:
+def score_with_causal_lm(model_id: str, trials: List[Dict],
+                          trust_remote_code: bool = False) -> List[Dict]:
     """For decoder-only models we can't use [MASK]. Instead we score the
     candidate as the next token after the prefix prompt."""
     import torch
@@ -470,7 +492,7 @@ def score_with_causal_lm(model_id: str, trust_remote_code: bool = False) -> List
 
     rows = []
     with torch.no_grad():
-        for trial in TRIALS:
+        for trial in trials:
             target_logprobs: List[float] = []
             distractor_logprobs: List[float] = []
             target_top1_wins = 0
@@ -547,15 +569,16 @@ def main():
         "Qwen/Qwen2.5-3B",
     ]
 
+    trials = _load_trials()
     all_rows: List[Dict] = []
 
     for hf_id in mlm_models:
         print(f"\n=== {hf_id}  (MLM) ===")
-        all_rows.extend(score_with_mlm(hf_id))
+        all_rows.extend(score_with_mlm(hf_id, trials))
 
     for hf_id in causal_models:
         print(f"\n=== {hf_id}  (causal) ===")
-        all_rows.extend(score_with_causal_lm(hf_id))
+        all_rows.extend(score_with_causal_lm(hf_id, trials))
 
     df = pd.DataFrame(all_rows)
     df.to_csv(RESULTS_DIR / "radical_cloze.csv", index=False)
