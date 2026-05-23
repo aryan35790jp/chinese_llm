@@ -29,3 +29,8 @@ backups/
 # Backup files left by integration tests
 data/*.bak_*
 results/*.bak_*
+
+# Downloaded zip artifacts (transient — not committed)
+results.zip
+results (*).zip
+*.zip
