@@ -3,13 +3,11 @@
 %  Aryan Maity (St. Edmunds College, NEHU)
 %
 %  Compile on Overleaf with XeLaTeX (Menu -> Compiler -> XeLaTeX).
-%  Two-column ACL-style, A4. Times font. Single-column references.
-%  Designed to render cleanly at 100%; no overlapping floats; no
-%  overfull boxes; no orphan/widow headings; URL breaks cleanly.
+%  Two-column ACL-style, A4. Times font.
 % =====================================================================
 \documentclass[11pt,a4paper,twocolumn]{article}
 
-% ---------- geometry: matches ACL/EMNLP visual feel ----------
+% ---------- geometry ----------
 \usepackage[a4paper,
             top=1.0in,
             bottom=1.05in,
@@ -20,9 +18,9 @@
             headsep=0.25in]{geometry}
 
 % ---------- core packages ----------
-\usepackage{microtype}                     % tighter character protrusion
+\usepackage{microtype}
 \usepackage{amsmath,amssymb}
-\usepackage{mathptmx}                      % Times-equivalent for body + math
+\usepackage{mathptmx}
 \usepackage[T1]{fontenc}
 \usepackage{booktabs}
 \usepackage{array}
@@ -33,14 +31,13 @@
 \usepackage{enumitem}
 \usepackage[normalem]{ulem}
 \usepackage{xeCJK}
-\usepackage{xurl}                          % URL line-breaking
+\usepackage{xurl}
 \usepackage[hidelinks,colorlinks=false,breaklinks=true]{hyperref}
-\usepackage{balance}                       % balance last-page columns
-\usepackage{flushend}                      % balance columns where needed
-\usepackage{stfloats}                      % full-width floats may go bottom
+\usepackage{balance}
+\usepackage{stfloats}
 \usepackage{ragged2e}
 
-% ---------- prevent overflow / orphans / widows / overfull boxes ----------
+% ---------- prevent overflow / orphans / widows ----------
 \setlength{\emergencystretch}{3em}
 \sloppy
 \hyphenpenalty=200
@@ -50,13 +47,13 @@
 \displaywidowpenalty=10000
 \hbadness=10000
 \vbadness=10000
-\raggedbottom                               % allow short columns; no rubber stretch
+\raggedbottom                              % CRITICAL: do NOT stretch columns
 
 % ---------- url breaking ----------
 \renewcommand{\UrlFont}{\small\ttfamily}
 \Urlmuskip=0mu plus 1mu
 
-% ---------- CJK font (Noto Serif CJK SC ships with Overleaf) ----------
+% ---------- CJK font ----------
 \setCJKmainfont{Noto Serif CJK SC}[
   AutoFakeBold = 2.5,
   AutoFakeSlant = 0.2
@@ -64,18 +61,11 @@
 \XeTeXlinebreaklocale "zh"
 \XeTeXlinebreakskip = 0pt plus 1pt minus 0.1pt
 
-% ---------- typography: ACL-style headings ----------
+% ---------- headings: FIXED spacing, no rubber stretch ----------
 \titleformat{\section}{\normalsize\bfseries}{\thesection}{0.6em}{}
 \titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.5em}{}
 \titlespacing{\section}{0pt}{1.4ex}{0.5ex}
 \titlespacing{\subsection}{0pt}{0.9ex}{0.3ex}
-
-% Prevent orphan headings: section title must stay with at least 3 lines below
-\usepackage{needspace}
-\let\oldsection\section
-\renewcommand{\section}[1]{\needspace{4\baselineskip}\oldsection{#1}}
-\let\oldsubsection\subsection
-\renewcommand{\subsection}[1]{\needspace{3\baselineskip}\oldsubsection{#1}}
 
 \setlength{\parskip}{0.20em}
 \setlength{\parindent}{1em}
@@ -91,14 +81,9 @@
 \setlength{\heavyrulewidth}{0.08em}
 \setlength{\lightrulewidth}{0.05em}
 
-% Custom column types: ragged narrow CI columns (no line-overflow)
-\newcolumntype{C}{>{\centering\arraybackslash}X}
-\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
-\newcolumntype{L}{>{\raggedright\arraybackslash}X}
-
 % ---------- title block ----------
 \title{\bfseries\large
-  Decomposing Radical-Aligned Geometry in\\[1pt]
+  Decomposing Radical-Aligned Geometry in\\
   Chinese Character Embeddings:\\[2pt]
   \normalsize\mdseries\itshape
   Form, Distribution, Frequency,\\
@@ -362,7 +347,6 @@ values from the same initialization distribution.
 \section{Results}
 \label{sec:results}
 
-% ---------- Table 1: full-width, top of page ----------
 \begin{table*}[t!]
 \centering
 \caption{Last-layer and peak-layer Cohen's $d$, isotropy-corrected,
@@ -390,13 +374,11 @@ JP-BERT-char (kanji subset)   & 0.057 & 0.059 & 9  & 0.020 \\
 \end{table*}
 
 \subsection{Layer-wise corpus-scale cohesion}
-\noindent
 The ranking in Table~\ref{tab:layerwise} is not ``Chinese-pretrained
 models on top, multilingual at the bottom'': MacBERT and ERNIE-3.0 sit
 in the middle. The split that emerges in the variance decomposition is
 more informative than the corpus-scale $d$ ordering.
 
-% ---------- Table 2: full-width, top of page ----------
 \begin{table*}[t!]
 \centering
 \caption{Cluster-robust regression: partial-$R^2$ for the radical and
@@ -760,8 +742,7 @@ for the full pipeline on a single Colab T4 GPU is approximately
 is 50~minutes of embedding extraction across the ten models.
 
 % =====================================================================
-% References (continue in two columns; no page break)
-% =====================================================================
+\balance
 \begin{thebibliography}{99}
 \footnotesize
 \setlength{\itemsep}{2pt}
