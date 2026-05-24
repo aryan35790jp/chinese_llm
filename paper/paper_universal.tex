@@ -38,7 +38,6 @@
 \usepackage{balance}                       % balance last-page columns
 \usepackage{flushend}                      % balance columns where needed
 \usepackage{stfloats}                      % full-width floats may go bottom
-\usepackage{authblk}
 \usepackage{ragged2e}
 
 % ---------- prevent overflow / orphans / widows / overfull boxes ----------
@@ -107,9 +106,9 @@
 }
 
 \author{%
-  \normalsize\textbf{Aryan Maity}\\[1pt]
-  \footnotesize B.Tech Computer Science, St.\ Edmunds College (NEHU), India\\[-1pt]
-  \footnotesize \texttt{aryanmaity3579@gmail.com}\\[-1pt]
+  \normalsize\textbf{Aryan Maity}\\
+  \footnotesize B.Tech Computer Science, St.\ Edmunds College (NEHU), India\\
+  \footnotesize \texttt{aryanmaity3579@gmail.com}\\
   \footnotesize \url{https://github.com/aryan35790jp/chinese_llm}
 }
 
@@ -479,7 +478,7 @@ significant at $\alpha = 0.05$.}}
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Model} & $\overline{\Delta}$ & \textbf{95\% CI} & $\bm{p}$ & \textbf{top-1}\\
+\textbf{Model} & $\overline{\Delta}$ & \textbf{95\% CI} & \textit{p} & \textbf{top-1}\\
 \midrule
 Qwen2.5-3B          & $+0.36$  & $[-0.93,\,1.48]$ & 0.58 & 0.54 \\
 Qwen2.5-1.5B        & $+0.20$  & $[-0.94,\,1.14]$ & 0.74 & 0.63 \\
