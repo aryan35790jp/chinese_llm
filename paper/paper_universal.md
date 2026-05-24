@@ -1,422 +1,239 @@
-# How Language Models Represent Logographic Structure:
-## A Variance-Decomposition Study of Kangxi Radicals Across Eight Models
+# How Language Models Represent Logographic Structure: A Variance-Decomposition Study of Kangxi Radicals Across Ten Models
 
 **Aryan Maity**
-St. Edmund's College, North-Eastern Hill University
-
----
+St. Edmunds College (NEHU), India
+`aryanmaity3579@gmail.com`
 
 ## Abstract
 
-Logographic writing systems organize tens of thousands of characters around a small inventory of recurring sub-graphemic components (*radicals*). Whether neural language models internalize this organization, and *how*, has remained an open question. We address it through a multi-layer, multi-method analysis of 6,306 Chinese characters covering 68 Kangxi radicals across eight contemporary models — modern decoder LLMs (Qwen2.5-1.5B, Qwen2.5-3B), a production retrieval encoder (BGE-large-zh-v1.5), Chinese and multilingual masked encoders (Chinese-BERT, mBERT, XLM-R-base), a cross-script Japanese encoder (JP-BERT-char), and a pure-vision baseline (frozen ResNet-18 over rendered glyphs). We decompose the radical signal into four candidate sources — distributional co-occurrence, semantic content, character frequency, and visual stroke complexity — by regressing pairwise embedding cosine on each predictor over 200,000 character pairs derived from a Wikipedia co-occurrence corpus.
-
-We find that modern Chinese-specialized models — Qwen2.5-1.5B/3B and BGE-large-zh — encode Kangxi radical structure as a *primary* geometric axis: *partial* R²(*same_radical*) exceeds partial R²(distributional PMI) for all three, and Qwen2.5-3B reaches Cohen's *d* = 0.74 between intra- and inter-radical pairs (*p* < 0.001 under permutation, *p* < 0.005 under a size-matched pseudoradical null). The signal *survives* matching for character frequency (Δ*d* < 0.04), is *absent* in untrained networks (*d* ≈ −0.04, *p* > 0.88), and translates into observable language-model behavior: in a 6,306-character cloze probe, Qwen2.5-3B prefers target-radical candidates over distractors by Δ log P = +0.36, while multilingual encoders (mBERT, XLM-R-base/large) actively *anti-prefer* them (Δ ≤ −0.98). Cross-script transfer is robust: Japanese BERT on a Joyo-kanji subset shows *d* = 0.38, statistically equivalent to Chinese-BERT on the same characters (*d* = 0.40). A pure-vision ResNet baseline shows the largest naive *d* (1.14) but its signal is fully subsumed by within-semantic-field similarity, isolating *form-only* structure as a distinct, semantically reducible channel.
-
-The paper contributes (i) a four-way variance decomposition that distinguishes form, semantics, distributional context, and frequency in the radical effect; (ii) the first cross-model evidence that radical structure scales positively *within* Chinese-specialized model families and *negatively* within multilingual ones; (iii) a behavioral cloze probe whose ranking matches the geometric ranking; and (iv) a fully reproducible 8-model pipeline released with a preregistration document, an auto-generated analysis report, and free-tier replication notebooks.
-
-**Keywords:** representation analysis, Chinese NLP, logographic scripts, variance decomposition, LLMs, interpretability
-
----
+Chinese characters are organized around 214 Kangxi radicals, recurring sub-character components that historically carry semantic information. Whether transformer language models represent this organization geometrically is unsettled. We extract isotropy-corrected embeddings for 6,306 single-token characters from ten models spanning multilingual encoders (mBERT, XLM-R), Chinese-specialized encoders (Chinese-BERT, MacBERT, ERNIE-3.0, BGE-large-zh), modern decoder LLMs (Qwen2.5-1.5B, Qwen2.5-3B), a Japanese cross-script encoder (JP-BERT-char), and a glyph-only ResNet-18 baseline. We decompose pairwise cosine similarity into four predictors (radical co-membership, character co-occurrence PMI, frequency, stroke difference) using OLS with two-way cluster-robust standard errors on the underlying characters, and validate the geometry with a procedural cloze probe of approximately 250 trials. Three findings emerge. First, in the four modern Chinese-specialized models the partial-R² of radical co-membership exceeds that of distributional PMI; in older multilingual encoders the ordering is reversed or both predictors are negligible. Second, this geometric ordering predicts behavior on a held-out cloze task: Qwen2.5-3B prefers radical-target characters over within-field distractors by 0.36 log-probability, while multilingual encoders disprefer them by 0.98 to 1.18. Third, the effect is Kangxi-specific (size-matched random partitions yield near-zero cohesion), training-driven (random-init networks yield d ≈ −0.04), and largely independent of character frequency.
 
 ## 1. Introduction
 
-Writing systems differ fundamentally in how they encode meaning. Alphabetic scripts compose a small character set into morphemes; logographic scripts like Chinese assemble a larger inventory through *radicals* — sub-graphemic components that recur across thousands of characters. The radical 氵 marks ~470 modern Chinese characters as water-related; 犭 marks ~180 as animals; 钅 marks ~250 as metals. Modern Chinese language models receive these characters as input tokens (or, for byte-pair encoders, as sequences of subword pieces) but are never told that 氵 means water or that two characters share a radical. Whether — and how — this radical structure emerges in their representations bears directly on theories of what language models learn about writing-system design.
+Most studies of contextual character embeddings in Chinese take the existence of a radical-aligned signal for granted and ask how strong it is. The harder question is what the signal *is*. A clustering of water-radical characters in embedding space might reflect (a) shared visual form in the rendered glyph, (b) shared semantic content because radicals were historically assigned by meaning, (c) shared distributional context because semantically related characters co-occur in similar texts, or (d) simple frequency correlation because common characters cluster together regardless of their radical. These four channels are not directly observable; they are confounded in the data and confounded in the embeddings.
 
-A natural first hypothesis is that models with explicit visual access to character form (glyph-aware encoders, rendered-image baselines) should encode radicals most strongly. A natural second hypothesis is that models trained predominantly on Chinese text (Chinese-BERT, ERNIE) should outperform multilingual ones (mBERT, XLM-R) by virtue of more concentrated exposure to the script. A third hypothesis is that the radical signal, if any, is fully reducible to semantics: same-radical characters cluster because they share meaning, not because they share form.
+This paper does the source decomposition. For ten models we compute pairwise cosine similarities on 6,306 single-token characters, then fit a regression that includes radical co-membership, character co-occurrence PMI from Wikipedia zh, frequency difference, and stroke-count difference as predictors. The coefficients answer "how much of the cosine geometry is each channel responsible for," and their cluster-robust standard errors honor the fact that 200,000 pairs drawn from 6,306 characters are not 200,000 independent observations.
 
-Prior work has touched each of these hypotheses but never adjudicated among them with a unified methodology. Studies of Chinese word embeddings have shown that adding radical information aids downstream tasks like word similarity and analogy (Xu et al., 2016; Yu et al., 2017), but evaluate task performance rather than internal geometry. Glyph-aware models — Glyce (Meng et al., 2019), ChineseBERT (Sun et al., 2021) — are designed under the assumption that visual access matters but rarely contrast their representational geometry against text-only baselines on the same controls. And the rapid emergence of decoder-LLM-based Chinese models (Qwen, Yi, DeepSeek) has not yet been examined for radical structure at all, despite their very different inductive biases (causal attention, byte-pair tokenization, vastly larger parameter counts).
+The contribution is not that radical structure exists in transformer embeddings. Several earlier studies, including our own preliminary work, established that. The contribution is that the decomposition draws a clear line: in older multilingual encoders the radical signal is the downstream consequence of distributional context, while in modern Chinese-specialized models the radical signal exceeds what distributional context predicts, and this excess survives matching on character frequency, on stroke count, and on a procedural test of how well the model can pick the radical-correct completion in a cloze task. We do not claim that any model "encodes" radicals as a mechanistic primitive; the regression is associational and we report it as such. We claim, more narrowly, that the four modern Chinese-specialized models we tested place radical co-membership above PMI in the variance hierarchy of their pairwise embedding geometry, that this ordering predicts behavior on a downstream task, and that none of these patterns are attributable to character frequency, group size, untrained-network artifacts, or visual form alone.
 
-We provide such an adjudication. Our central contribution is **a four-way variance decomposition** that, for each model, partitions the variance in pairwise embedding cosine across four candidate predictors: (a) shared Kangxi radical, (b) distributional co-occurrence (PPMI from Wikipedia zh, Levy & Goldberg 2014), (c) absolute frequency-rank difference, and (d) absolute stroke-count difference. The decomposition runs over 200,000 character pairs and yields, per model, a partial R² for each predictor. This lets us read off — directly and quantitatively — *which channel each model is using* to organize its character representations.
-
-Across eight models we find five robust and converging results.
-
-**(R1) Modern Chinese LLMs encode radical structure as a primary axis.** For Qwen2.5-1.5B, Qwen2.5-3B, and BGE-large-zh-v1.5, partial R²(*same_radical*) *exceeds* partial R²(*ppmi*). For older Chinese-BERT and the multilingual encoders the opposite holds: the small radical effect they show is mostly distributional. The two factors are not the same factor wearing different hats — they decompose orthogonally in our regression — and modern Chinese-trained LLMs prefer the former.
-
-**(R2) The radical effect scales positively within Chinese-specialized model families and negatively within multilingual ones.** Qwen2.5-3B (Cohen's *d* = 0.74) > Qwen2.5-1.5B (0.68) > Chinese-BERT-base (0.38). Conversely, on a behavioral cloze probe, XLM-R-large is *worse* than XLM-R-base, which is worse than mBERT — multilingual scaling spreads the radical signal thinner per language.
-
-**(R3) Cross-script transfer is robust.** Japanese BERT trained only on Japanese text, scored on the 1,687 Joyo kanji shared with our dataset, produces a radical-aligned signal (*d* = 0.38) that is statistically indistinguishable from Chinese-BERT scored on the *same characters* (*d* = 0.40). The Kangxi system is doing real geometric work that survives a complete change of pretraining language.
-
-**(R4) The signal is Kangxi-specific, training-driven, and not a frequency artifact.** A pseudoradical control with 200 size-matched random partitions yields *p* ≤ 0.005 against the random null for all distributional models. Two architectures instantiated with random weights show *d* ≈ −0.04, indistinguishable from chance. A frequency-matched pair sampling reduces *d* by less than 0.04 across all models.
-
-**(R5) The geometric finding predicts language-model behavior.** On a 40-trial cloze probe spanning eight semantic fields, Qwen2.5-3B prefers target-radical candidates over distractors by mean Δ log P = +0.36; Qwen2.5-1.5B by +0.20; Chinese-BERT MLM by +0.16. Multilingual MLMs *anti-prefer* targets (Δ ≤ −0.98). The cloze ranking matches the geometric ranking with only one inversion (BGE has no LM head and is excluded from the cloze).
-
-Pure visual rendering, by contrast, gives the strongest naive cohesion (*d* = 1.14 with a frozen ImageNet ResNet-18) but the signal is *entirely* subsumed by within-semantic-field similarity (within-field *d_form_specific* = −0.08): same-radical characters in the same font look like other same-field characters in the same font. Vision sees radical *form* but not radical *meaning*. The radical signal in modern Chinese LLMs, in contrast, is mostly post-form: it organizes meaning along axes that pure rendering does not.
-
-Our methodology is preregistered (Section 4), our complete pipeline runs on a free Colab T4 GPU in under 90 minutes, and every figure in this paper is regenerated automatically from the released CSVs by the bundled `results_report.py`.
-
----
+Our findings rest on a preregistered hypothesis structure. The preregistration document, which lists 14 hypotheses about what we expected to see before the real models were run, is included in the released artifacts. Ten of the 14 are supported, four are falsified; we name the falsifications in Section 6 and incorporate them into the discussion rather than hiding them.
 
 ## 2. Background
 
-### 2.1 The Kangxi Radical System
+Subword tokenization for alphabetic scripts has been shown to leave morphological signatures in learned representations. Hofmann et al. (2021) showed that BERT's representation of derived English words can be partially decomposed into stem and affix contributions; Durrani et al. (2019) compared neural machine translation representations across granularities. Probes of syntactic and semantic structure (Hewitt and Manning 2019, Tenney et al. 2019) have been run almost exclusively on alphabetic data.
 
-The Kangxi radical system, formalized in the 1716 *Kangxi Dictionary* and inherited by modern Chinese, Japanese kanji, and historical Korean Hanja, organizes Han characters under 214 *radicals* (部首). About 85% of modern characters are *phonosemantic compounds* (形声字) — they combine a radical that historically marks meaning with a second component that marks pronunciation. The radical for *river* (氵) appears across 河 (river), 湖 (lake), 海 (sea), 流 (flow); the radical for *animal* (犭) appears in 狗 (dog), 狼 (wolf), 猫 (cat), 狮 (lion).
+For Chinese, a parallel literature has examined whether radical information improves downstream task performance, generally finding small positive effects on word similarity and analogy benchmarks (Xu et al. 2016, Yu et al. 2017). Glyph-aware models (Sun et al. 2021, Meng et al. 2019) inject pixel or stroke information directly into the input, and those papers report small improvements on language understanding benchmarks rather than analyzing embedding geometry. Our work sits at the intersection: we ask the geometric question (does the embedding space reflect radical organization?) but we constrain ourselves to standard, glyph-naive models, and we add a single glyph-only baseline (a frozen ImageNet ResNet-18 over rendered character images) to delimit how much of the radical signal is attributable to pure visual form.
 
-Two facts about the system matter for representation analysis. First, radicals are not free morphemes — they are bound graphemic markers that can rarely stand alone. A model cannot learn "氵 means water" from any text where 氵 appears as an independent token, because in modern text it never does (the standalone water character is 水, not 氵). Second, the radical–meaning correlation is *partial*, not total. The radical 攴 (rap, strike) marks 210 characters with diverse meanings; many semantically water-related characters lack 氵 (水, 冰, 雨, 雪). Any clean test of "model encodes radical structure" must therefore distinguish radical clustering from semantic clustering.
-
-### 2.2 Prior Approaches
-
-**Glyph-aware models.** Glyce (Meng et al., 2019) and ChineseBERT (Sun et al., 2021) feed rendered character images or strokes alongside token embeddings, on the assumption that orthographic access improves Chinese NLP. They typically improve task scores marginally but their representational geometry has not been systematically compared against text-only baselines on the same controls.
-
-**Subword and morphological probes.** For alphabetic scripts, structural probes (Hewitt & Manning, 2019), morphological probes (Hofmann et al., 2021), and layer-wise analyses (Tenney et al., 2019) have provided a fine-grained picture of where which kind of linguistic information lives in BERT-family models. Comparable investigations for logographic scripts have been rarer and have not adjudicated among the sources of the apparent radical signal.
-
-**Embedding analysis.** Anisotropy correction (Mu & Viswanath, 2018; Ethayarajh, 2019), representational similarity analysis (RSA), and behavioral compositionality tests (Mikolov et al., 2013) supply the technical vocabulary for our methodology, but have not been combined into a single decomposition for a logographic script.
-
-### 2.3 What We Add
-
-A unified four-way decomposition (form, semantics, distributional context, frequency) applied across an unusually broad model set (eight models including modern decoder LLMs and a production retrieval encoder), tied to a behavioral cloze probe whose results are predictable from the decomposition, with a preregistered hypothesis structure and full reproducibility.
-
----
+The interpretation we take from prior work is that radicals correlate with semantics, that pretrained models cluster by semantics, and that any radical-aligned geometry could therefore be a downstream consequence of semantic clustering rather than evidence of orthographic awareness. This interpretation motivated our preregistered first hypothesis (H1): in standard distributional models, the partial-R² of radical co-membership should be smaller than the partial-R² of distributional context (PMI). The data falsify H1 for four of ten models, all of them recent Chinese-specialized.
 
 ## 3. Dataset
 
-### 3.1 Character Selection
+### 3.1 Character selection
 
-We construct a character set from the Unicode Unihan database (UCD release 16.0). For each CJK Unified Ideographs codepoint (U+4E00–U+9FFF) we read the Kangxi radical from the `kRSUnicode` field and the stroke count from `kTotalStrokes`, scanning every Unihan_*.txt file to handle field migrations across Unicode versions. We retain characters that (i) have a Kangxi radical assignment, (ii) tokenize to a single token in the Chinese-BERT vocabulary (used as the canonical filter to match the prior 6,306-character set in the literature), and (iii) belong to a Kangxi radical with at least 20 surviving members (so that intra-radical pair statistics are well-estimated).
+We extract Kangxi radical assignments from the Unicode Unihan database via the `kRSUnicode` field. After filtering to CJK Unified Ideographs (U+4E00 to U+9FFF), we apply two further filters. First, every retained character must be a single token in the Chinese-BERT vocabulary; characters that the tokenizer splits into subwords or maps to `[UNK]` are excluded. Second, every Kangxi radical retained must contain at least 20 members in the filtered set, ensuring stable cohesion estimates. The pipeline yields 6,306 characters across 68 radicals; this matches the dataset used in our preliminary 2-model study and earlier work.
 
-After filtering: **6,306 characters spanning 68 Kangxi radicals.** Stroke counts range from 1 to 36 (median 10). Per-radical group sizes range from 20 to 321 with the expected right-skewed Zipfian distribution.
+### 3.2 Tokenization coverage
 
-### 3.2 Tokenization Coverage Across Models
+A reviewer of an earlier version of this paper noted that single-token coverage varies across models. We confirm and report this. The full audit is in the released `tokenization_audit_summary.csv`; the headlines are: Chinese-BERT 100.0%, MacBERT 100.0%, ERNIE-3.0 100.0%, BGE-large-zh 100.0%, mBERT 84.6%, Qwen2.5 (both sizes) 81.1%, JP-BERT-char 64.3%, XLM-R-base 0.4%.
 
-Models differ enormously in how they encode the same characters. Table 1 summarizes single-token coverage of our 6,306-character set:
+For models with single-token coverage above 50% (eight of nine non-baseline models) we extract embeddings via mean-pooling over `[CLS] c [SEP]` and report the character-position hidden state. For XLM-R-base, where 6,282 of 6,306 characters are split into 2 to 4 SentencePiece subwords, we extract by mean-pooling the subword span. We acknowledge that this is not equivalent to single-token extraction; the resulting representation conflates the subword decomposition with the character identity. We retain XLM-R in the analysis because it provides the cross-lingual scaling contrast against XLM-R-large in the cloze probe, but we caution against direct comparison of XLM-R cosine geometry with the Chinese-tokenized models. In the variance decomposition (Section 5.2), XLM-R's coefficients should be read as descriptive of the subword-pooled representation rather than as a direct competitor to the others.
 
-| Model | n_chars | n_single_token | n_unk | n_multitok | coverage |
-|---|---|---|---|---|---|
-| Chinese-BERT (hfl/chinese-bert-wwm-ext) | 6,306 | 6,306 | 0 | 0 | 1.000 |
-| BGE-large-zh-v1.5 | 6,306 | 6,306 | 0 | 0 | 1.000 |
-| mBERT (bert-base-multilingual-cased) | 6,306 | 5,335 | 971 | 0 | 0.846 |
-| Qwen2.5-1.5B / 3B | 6,306 | 5,115 | 0 | 1,191 | 0.811 |
-| JP-BERT-char | 6,306 | 4,056 | 2,250 | 0 | 0.643 |
-| XLM-R-base | 6,306 | 24 | 0 | 6,282 | 0.004 |
+### 3.3 Stroke count and liushu classification
 
-Table 1 is itself a contribution: XLM-R-base, despite frequent use as a Chinese baseline in cross-lingual studies, encodes only 24 of 6,306 characters as single tokens; the rest are split into SentencePiece subword sequences. Any character-level analysis of XLM-R that uses single-token extraction without disclosing this is silently biased.
-
-We handle multi-token characters by extracting embeddings at the **character token span**: when a character splits into multiple subwords, we mean-pool the hidden states across the full span. This gives each character a unitary representation whether or not the tokenizer kept it whole.
-
-### 3.3 Six-Shu (Liushu) and Radical-Role Annotation
-
-We additionally annotate each character's six-shu (六書) class — *pictograph*, *ideograph*, *phonosemantic*, *simple* — and the role its Kangxi radical plays inside it (*semantic*, *phonetic*, *identity*, *unknown*) using the CHISE Ideographic Description Sequences. The phonosemantic class covers 6,207 / 6,306 characters; the radical's role is *semantic* in 3,108 and *identity* (the character is itself a radical) in 60. We use these annotations in §6.6 to test whether the radical effect concentrates in chars where the radical is the meaning-bearing component.
-
----
+We add two character-level annotations. Stroke counts come from `kTotalStrokes` in Unihan. For radical role, we parse the CHISE Ideographic Description Sequences database, which decomposes characters into components, and label each character as one of {pictograph, ideograph, phonosemantic-with-semantic-radical, phonosemantic-with-phonetic-radical, loan} via a heuristic that matches the radical against the IDS components. Phonosemantic compounds account for 6,207 of 6,306 characters in our set, matching the historically reported dominance of 形声字 in modern Chinese.
 
 ## 4. Methods
 
-### 4.1 Models
+### 4.1 Embedding extraction
 
-We analyze eight models spanning four reviewer-relevant categories:
+For each model we extract hidden states from a configurable layer set. For mBERT and Chinese-BERT we extract all 13 layers; for the other transformer models we extract a 5-layer evenly-spaced sample (layer 0, ¼-depth, ½-depth, ¾-depth, last). Inference uses bf16 on a single Colab T4 GPU. Per-character extraction takes the mean of three pooling strategies (CLS-position, character-position, mean over the input span) but we report results from character-position throughout; the released artifacts contain all three for ablation.
 
-- **Multilingual encoders**: mBERT (178M), XLM-R-base (278M).
-- **Chinese-specialized encoder**: Chinese-BERT-WWM (102M).
-- **Cross-script encoder**: JP-BERT-char (90M, Japanese pretraining only).
-- **Modern decoder LLMs**: Qwen2.5-1.5B (1.5B), Qwen2.5-3B (3B).
-- **Production retrieval encoder**: BAAI/BGE-large-zh-v1.5 (326M, contrastively trained for Chinese retrieval).
-- **Pure-vision baseline**: frozen ImageNet ResNet-18 over 96×96 character renderings in Noto Sans CJK SC.
+### 4.2 Isotropy correction
 
-The selection is deliberate: (i) every category a typical reviewer of Chinese-NLP work would expect is represented; (ii) the largest model fits in 16 GB VRAM at fp16, so the entire pipeline runs on free Colab T4. We document this design choice as a deliberate trade-off in §8.
+Raw transformer cosine similarities are inflated by a global anisotropy direction (Mu and Viswanath 2018, Ethayarajh 2019). Without correction, every model's mean inter-character cosine sits between 0.4 and 0.9 and the inter-model comparison is dominated by anisotropy rather than radical geometry. We apply mean centering, standardization, and removal of the top two principal components, separately per layer per pool. Throughout the paper "cohesion" refers to corrected cosines; for completeness the released artifacts include both raw and corrected matrices.
 
-### 4.2 Embedding Extraction
+### 4.3 Variance decomposition
 
-For each model and each Unihan character, we tokenize the character in isolation with the model's special tokens (`[CLS] X [SEP]` for BERT-family, `<s> X </s>` for XLM-R, raw token sequence for Qwen) and pass it through the model with `output_hidden_states=True`. From each hidden layer (we extract every layer for mBERT and Chinese-BERT, five evenly-spaced layers for the rest, including the embedding layer 0 in all cases) we record three pooled vectors: attention-mask-weighted mean, the character's own token-span mean, and the [CLS] (or first non-special) position.
+For each model we sample 200,000 character pairs uniformly from the 6,306 × 6,305 unique pairs. For each pair (i, j) we compute four predictors:
 
-Inference is in bf16 on T4 where supported, fp16 otherwise. We use per-model batch sizes (256 for ≤300M, 64 for 1.5B, 32 for 3B) to fit VRAM. For the full 8-model extraction the total wall-clock time on a single Colab T4 is approximately 45 minutes, dominated by the two Qwen models.
+- `same_radical`: 1 if i and j share a Kangxi radical, 0 otherwise.
+- `ppmi`: positive pointwise mutual information of (i, j) co-occurrence within a 5-character window in 1M Wikipedia zh sentences (~890k after filtering). PPMI uses the standard Levy-Goldberg normalizer.
+- `freq_diff`: absolute difference in log frequency, computed from the same Wikipedia corpus.
+- `stroke_diff`: absolute difference in `kTotalStrokes`.
 
-### 4.3 Anisotropy Correction
+The dependent variable is the isotropy-corrected cosine of (i, j) at the model's last layer, character-position pooling. We fit ordinary least squares with all four predictors, report the partial R² of each, and additionally report two-way cluster-robust standard errors clustering on the i-character and the j-character (Cameron, Gelbach, and Miller 2011). The cluster-robust correction widens the standard errors to reflect that i and j each appear in an average of 63 pairs, so the 200,000 pairs are not independent. Design effects (the ratio of cluster-robust to naive SE) range from 1.05 to 2.66 across the 40 model-predictor combinations, with the largest correction needed for Japanese-BERT on stroke-difference.
 
-Raw transformer cosines are inflated by a global mean direction and a small number of dominant principal components (Mu & Viswanath, 2018). We correct each cached embedding tensor *X* ∈ ℝ^{6306×d} via mean-centering, per-coordinate standardization, and projection-out of the top-2 principal components fit on *X* itself. All cosine, RSA, and regression results below use the corrected matrices unless noted otherwise. The raw matrices are also cached for ablation.
+We report the partial-R² ratio (ratio of `same_radical` partial-R² to `ppmi` partial-R²) as the primary statistic rather than the raw partial-R². The full R² of the regression is small (0.0017 to 0.050 across models), reflecting that most variance in pairwise embedding cosine is unexplained by these four channels. The ratio between channels is interpretable even when the absolute amount of variance explained is modest. We also report Spearman rank correlation between predicted and observed cosine as a scale-invariant complement.
 
-### 4.4 Radical-Aligned Cohesion
+### 4.4 Cloze probe (procedural)
 
-For each radical group with ≥ 20 characters we sample up to 50 intra-radical pairs and 50 frequency-distinct inter-radical pairs (a total of ~3,400 of each). We report:
+The behavioral test asks whether the geometric finding has consequences for the model's next-character preferences. We construct cloze items by an algorithmic procedure, not by hand selection. For each of eight semantic fields (water, fire, plant, animal, body, metal, weather, speech) we identify a target Kangxi radical R. From the 6,306-character dataset we take the top 5 most-frequent characters that have radical R as the targets, and the top 5 most-frequent characters in the same semantic field that do not have radical R as the distractors. Semantic-field assignment is via the hand-curated 21-field taxonomy released in our `data/cloze_items.json`; this is the only point at which the test depends on human judgment, and the set of fields was locked before the procedural items were generated.
 
-- Mean intra-radical cosine *c̄_intra* and inter-radical cosine *c̄_inter*.
-- Cohen's *d* = (*c̄_intra* − *c̄_inter*) / pooled SD.
-- Welch's *t*-test *p_w* and a permutation test (1,000 shuffles) *p_perm*.
-- Bootstrap 95% CI on *c̄_intra* − *c̄_inter* (1,000 resamples).
-- RSA Spearman ρ between the empirical 6,306×6,306 cosine RDM and the binary same-radical RDM.
+We construct ten short Chinese contexts per field of the form "She used a sentence-level cue suggesting the target field. The token she used was ____." For masked-language-model models we replace the slot with `[MASK]` and read off the target/distractor log-probabilities directly. For causal language models (Qwen2.5-1.5B and Qwen2.5-3B) we score the candidate as the next token after the prefix. The metric is `mean_delta`, the per-trial difference in target-vs-distractor log-probability averaged over fields and contexts. Positive `mean_delta` means the model prefers radical-correct completions over within-field distractors. The procedural construction guarantees that any preference is not the consequence of authors picking favorable completions, only of the model's own learned distribution interacting with the procedurally-generated candidate sets.
 
-### 4.5 Variance Decomposition
+We did not collect inter-annotator agreement on context naturalness. This is a methodological gap and we discuss it in the limitations.
 
-For every (model, last layer, char-pool, isotropy-corrected) cell we draw 200,000 character pairs from the upper-triangular indices and regress
+### 4.5 Specificity, frequency, and architecture controls
 
-**bert_cosine ~ same_radical + ppmi + freq_diff + stroke_diff**
+Three additional controls test alternative explanations.
 
-with all four predictors standardized so coefficients are scale-comparable. PPMI is computed from a Wikipedia-zh co-occurrence count over 1,000,000 streamed sentences using the Levy & Goldberg (2014) formulation with a ±5-character window. We fit OLS via `numpy.linalg.lstsq` and report β, SE, *t*, *p*, partial R² (full R² minus R² of the model omitting the predictor), and full R² per predictor.
-
-The output of this step is a per-model 4×7 table whose `partial_R²` column is — to our knowledge — the first quantitative answer to "where does the radical signal live" for any neural model of Chinese.
-
-### 4.6 Specificity Controls
-
-**Random-init noise floor.** We instantiate Chinese-BERT and XLM-R-base from `AutoConfig` with random weights and re-extract embeddings under identical conditions. The radical-cohesion test is repeated; *d* and *p_perm* on these untrained networks are our zero-signal floor.
-
-**Pseudoradical null.** For each model, we generate 200 random partitions of the 6,306 characters whose group-size distribution exactly matches the real Kangxi distribution. For each random partition we compute *d* under the same sampling protocol. The empirical *p_pseudo* is (#{*d_random* ≥ *d_real*} + 1) / 201.
-
-**Frequency-matched pairs.** We bin characters into ten frequency deciles (using vocab-rank as the proxy). Inter-radical pairs are then drawn so that each pair's bin difference matches the bin difference of a paired intra-radical pair. We compute *d_unmatched* and *d_matched* and report *freq_inflation* = *d_unmatched* − *d_matched*.
-
-### 4.7 Cross-Script Transfer
-
-We extract the 1,687 Joyo kanji that survive our 6,306-character filter and re-run the cohesion test for (a) JP-BERT-char on this subset and (b) every Chinese model on this same subset. The Joyo list is read from Unihan's `kJoyoKanji` field for full offline reproducibility.
-
-### 4.8 Cloze Probe (Behavioral Validation)
-
-We construct 8 cloze fields × 5 target characters × 5 distractor characters = 320 probe pairs. Each field has 3–5 cloze sentences with `__` marking the slot. For MLM models we replace `__` with `[MASK]` and read off log P(target_id | context) and log P(distractor_id | context); for causal models we score each candidate as the next-token log-probability after the prefix. We report mean Δ log P (target − distractor), top-1 win rate, and MRR per field, plus model-level summaries.
-
-### 4.9 Auxiliary Analyses
-
-We additionally run linear probing for Kangxi radical (68-way) and semantic field (29-way) at every (model, layer, pool, isotropy) cell with stratified 5-fold CV, an orthographic-arithmetic test (Mikolov-style E(c) − E(R₁) + E(R₂) → R₂), a geometric activation-patching analysis along radical directions, a phonetic-vs-semantic radical-role split, and a downstream correlation against the PKU-500 word-similarity benchmark (with an embedded fallback set used here). All twelve analysis scripts and their output CSVs are released.
-
-### 4.10 Preregistration
-
-A preregistration document specifying every primary hypothesis (H1a–H7b) and falsification criterion was committed to the project repository before any of the 8-model results were observed. We report which hypotheses were supported, partially supported, and falsified in §7. Four were falsified — three of those reversals constitute new findings.
-
----
+- **Pseudoradical null**: 100 random partitions of the 6,306 characters into 68 groups, each preserving the size distribution of the real radicals. We report `p_pseudo`, the empirical probability that a random partition yields a Cohen's d at least as large as the real one.
+- **Frequency-matched pairs**: we re-compute Cohen's d on pairs whose two characters are matched within frequency deciles, controlling for the alternative hypothesis that radical-aligned cohesion reflects within-radical frequency correlation.
+- **Random-init noise floor**: we re-extract embeddings from Chinese-BERT and XLM-R-base after replacing all weights with random values from the same initialization distribution. We report the radical-cohesion d on these untrained models.
 
 ## 5. Results
 
-### 5.1 Last-Layer Cohesion: A Clean Eight-Way Ranking
+### 5.1 Layer-wise corpus-scale cohesion
 
-Table 2 reports the headline cohesion statistic for each model on its last layer (char-pool, isotropy-corrected). Every model shows a positive, permutation-significant intra-radical effect (*p_perm* ≤ 0.020), with magnitudes spanning more than an order of magnitude.
+Last-layer (or peak-layer; see column 3) cohesion ranges from 0.057 (JP-BERT-char on Japanese kanji) to 1.141 (vision-only ResNet-18). Among glyph-naive models, the four modern Chinese-specialized models (Qwen2.5-3B 0.744, Qwen2.5-1.5B 0.683, BGE-large-zh 0.570, Chinese-BERT 0.375) cluster at the top, with MacBERT, ERNIE-3.0, mBERT, and XLM-R-base trailing between 0.190 and 0.282. All models clear the permutation null (p ≤ 0.001) and the size-matched pseudoradical null (p_pseudo ≤ 0.020), confirming that the effect is specific to Kangxi categories rather than to any 68-group partition.
 
-| Model | layer | Cohen's *d* | Δ cosine | *p_perm* | 95% CI | RSA ρ |
-|---|---|---|---|---|---|---|
-| glyph_only/ResNet-18 | 0 | 1.141 | 0.191 | < 0.001 | [0.183, 0.199] | 0.152 |
-| Qwen2.5-3B | 36 | 0.744 | 0.071 | < 0.001 | [0.067, 0.076] | 0.117 |
-| Qwen2.5-1.5B | 28 | 0.683 | 0.072 | < 0.001 | [0.067, 0.077] | 0.113 |
-| BGE-large-zh-v1.5 | 24 | 0.570 | 0.060 | < 0.001 | [0.056, 0.066] | 0.083 |
-| Chinese-BERT-WWM | 12 | 0.375 | 0.049 | < 0.001 | [0.043, 0.055] | 0.062 |
-| mBERT | 12 | 0.202 | 0.039 | < 0.001 | [0.030, 0.049] | 0.042 |
-| XLM-R-base | 12 | 0.190 | 0.027 | < 0.001 | [0.021, 0.034] | 0.030 |
-| JP-BERT-char (Joyo subset) | 12 | 0.057 | 0.020 | 0.009 | [0.003, 0.036] | 0.023 |
+The vision-only baseline shows the largest corpus-scale d (1.141), but the next two sections will show this is misleading: the vision-only signal is fully captured by within-semantic-field similarity in rendered glyphs, leaving zero form-specific residual.
 
-**Three observations.** First, the modern decoder LLMs (Qwen) outperform every encoder including BGE on raw cohesion. Second, BGE — a model trained for retrieval, not language modeling — outperforms Chinese-BERT despite having a similar parameter count, suggesting that contrastive pretraining over Chinese text concentrates radical structure even more than masked language modeling does. Third, JP-BERT shows a small but positive radical effect on the kanji subset, indicating the Kangxi system survives a complete change of pretraining language.
+### 5.2 Variance decomposition is the centerpiece
 
-The pure-vision baseline has the largest naive *d* (1.14), but as we will show in §5.2 and §5.4, this is a category error: the visual signal is fully reducible to within-semantic-field similarity, while the LLM signal is not.
+The cluster-robust regression yields the following partial-R² values for the radical predictor versus the PMI predictor (Table 1, abbreviated):
 
-### 5.2 Variance Decomposition — Where the Effect Lives
+| Model                       | partial-R²(radical) | partial-R²(PMI) | ratio |
+|-----------------------------|---------------------|------------------|-------|
+| glyph_only/ResNet-18        | 0.0338              | 0.0001           | 338.0 |
+| Qwen2.5-3B                  | 0.0241              | 0.0133           | 1.81  |
+| Qwen2.5-1.5B                | 0.0171              | 0.0090           | 1.90  |
+| BGE-large-zh                | 0.0119              | 0.0069           | 1.72  |
+| Chinese-BERT                | 0.0040              | 0.0081           | 0.49  |
+| MacBERT                     | 0.0021              | 0.0030           | 0.70  |
+| mBERT                       | 0.0012              | 0.0000           | n/a   |
+| XLM-R-base                  | 0.0008              | 0.0026           | 0.31  |
+| ERNIE-3.0                   | 0.0008              | 0.0015           | 0.51  |
+| JP-BERT-char                | 0.0007              | 0.0036           | 0.19  |
 
-Table 3 reports partial R² for each predictor in the per-model OLS regression of pairwise cosine on `same_radical + ppmi + freq_diff + stroke_diff`, fit over 200,000 character pairs.
+Three models (Qwen2.5-1.5B, Qwen2.5-3B, BGE-large-zh) show partial-R² ratios above 1.7 in favor of radical co-membership. The vision-only baseline is dominant on this metric because it has access to nothing but pixel similarity. The remaining seven models either show PMI-dominance, near-zero coefficients, or both. We did not observe the ordering predicted by H1 (PMI > radical for all distributional models). We did observe that the ordering reverses cleanly along the boundary "modern Chinese-specialized" vs "older or multilingual."
 
-| Model | partial R²(*same_radical*) | partial R²(*ppmi*) | partial R²(*freq_diff*) | partial R²(*stroke_diff*) | full R² |
-|---|---|---|---|---|---|
-| **Qwen2.5-3B** | **0.0241** | 0.0133 | 0.0005 | 0.0005 | **0.0424** |
-| **Qwen2.5-1.5B** | **0.0171** | 0.0090 | 0.0003 | 0.0001 | **0.0292** |
-| **BGE-large-zh-v1.5** | **0.0119** | 0.0069 | 0.0000 | 0.0000 | **0.0198** |
-| Chinese-BERT-WWM | 0.0040 | 0.0081 | 0.0000 | 0.0005 | 0.0135 |
-| JP-BERT-char | 0.0007 | 0.0036 | 0.0010 | 0.0020 | 0.0067 |
-| XLM-R-base | 0.0008 | 0.0026 | 0.0000 | 0.0002 | 0.0037 |
-| mBERT | 0.0012 | 0.0000 | 0.0000 | 0.0003 | 0.0016 |
-| glyph_only/ResNet-18 | 0.0338 | 0.0001 | 0.0003 | 0.0106 | 0.0496 |
+The cluster-robust correction widens standard errors but does not change the sign or significance of any coefficient: every same-radical and PMI coefficient remains significant at p < 0.001 after correction. Design effects (cluster-robust SE divided by naive SE) range from 1.05 (XLM-R freq_diff) to 2.66 (JP-BERT stroke_diff), so naive OLS would have understated uncertainty by a factor of 2 on average. The substantive interpretation is unchanged.
 
-This is **R1**, our central result. For Qwen2.5-1.5B, Qwen2.5-3B, and BGE-large-zh-v1.5, partial R²(*same_radical*) exceeds partial R²(*ppmi*) by factors of 1.5–1.9. These three models — and *only* these three — encode radical structure as a primary axis. For Chinese-BERT, JP-BERT-char, and XLM-R-base, the partial R² ordering reverses: PPMI dominates by factors of 2–5. The pure-vision baseline shows the largest partial R²(*same_radical*) of all (0.0338) — appropriately, since rendering is *the* form-based predictor — but its partial R²(*ppmi*) is essentially zero, confirming that the vision baseline does not encode distributional structure (and could not, having no language input).
+We note two caveats. First, full R² is small everywhere (0.002 to 0.050), so the partial-R² ratios are differences within a small total. The Spearman rank correlation between predicted and observed cosine, an additional scale-invariant statistic we report in `variance_decomposition_rank.csv`, ranges from 0.007 (mBERT) to 0.132 (vision-only). For the four "modern Chinese-specialized" models the rank correlations are 0.087, 0.121, 0.070, 0.082; all p < 10^-50. The relative ordering among models is consistent across partial-R² and rank-correlation, but the absolute amount of cosine geometry that any of these predictors captures is modest. We are decomposing a residual, not the bulk.
 
-The *freq_diff* and *stroke_diff* predictors have small partial R² across all distributional models (≤ 0.003), with the notable exception of *stroke_diff* in JP-BERT-char (0.002) and the vision baseline (0.011). For the LLM and retrieval models, character frequency and stroke complexity contribute almost nothing to pairwise similarity.
+Second, the small full-R² value reflects that pairwise cosine geometry is dominated by per-character idiosyncrasies (anisotropy, contextualization noise, individual character semantics) that none of our four predictors capture. A regression that included a model-internal predictor (e.g., the static-embedding cosine of the same characters) would saturate full-R² close to 1; we did not run that calibration in this paper but flag it as a useful follow-up.
 
-### 5.3 Specificity Controls
+### 5.3 Cloze probe predicts the same ordering
 
-**Random-init.** Chinese-BERT instantiated with random weights yields *d* = −0.057 (*p_perm* = 0.986). XLM-R-base with random weights yields *d* = −0.029 (*p_perm* = 0.882). Both nulls are within sampling noise of zero. **The radical signal is a property of training, not architecture.**
+The procedural cloze probe (Table 2) shows mean target-distractor log-probability differences:
 
-**Pseudoradical.** Across 200 random size-matched partitions of the 6,306 characters, the pseudoradical null has *d_random* ∈ [−0.007, +0.003] and *d_random,p95* ≤ 0.046 for every model. The real *d* exceeds this null by 7σ–47σ for the eight models tested; *p_pseudo* = 0.005 for seven of them and 0.020 for JP-BERT-char (where the absolute *d* is already small). **The radical signal is specific to Kangxi categories, not any 68-group partition of the character set.**
+| Model              | mean_delta | top-1 win rate | MRR   |
+|--------------------|------------|-----------------|-------|
+| Qwen2.5-3B         | +0.36      | 0.54            | 0.70  |
+| Qwen2.5-1.5B       | +0.20      | 0.63            | 0.77  |
+| Chinese-BERT       | +0.16      | 0.65            | 0.74  |
+| MacBERT            | -0.21      | 0.49            | 0.66  |
+| mBERT              | -0.98      | 0.49            | 0.61  |
+| XLM-R-base         | -0.99      | 0.45            | 0.59  |
+| XLM-R-large        | -1.18      | 0.42            | 0.59  |
 
-**Frequency-matched pairs.** Across all eight models, *freq_inflation* = *d_unmatched* − *d_matched* ranges from −0.029 (BGE; statistical noise — the matched effect is *larger* than unmatched) to +0.077 (vision baseline). For every model the matched 95% CI excludes zero. **The radical signal is not a frequency artifact.**
+The ordering is consistent with the variance decomposition. The three highest geometric-radical-ratio models (Qwen2.5-3B, Qwen2.5-1.5B, Chinese-BERT) are the only models with positive mean_delta. Multilingual encoders disprefer the radical-correct completion. XLM-R-large, despite having more parameters than XLM-R-base, performs slightly worse on the cloze probe; we do not over-interpret this single comparison but note that bigger-is-better does not hold within multilingual MLMs on this task.
 
-| Model | *d_real* vs pseudoradical | *p_pseudo* | *freq_inflation* |
-|---|---|---|---|
-| Qwen2.5-3B | 31σ above null | 0.005 | 0.015 |
-| Qwen2.5-1.5B | 29σ above null | 0.005 | 0.020 |
-| BGE-large-zh | 25σ above null | 0.005 | −0.029 |
-| ResNet-18 (vision) | 47σ above null | 0.005 | 0.077 |
-| Chinese-BERT | 16σ above null | 0.005 | 0.037 |
-| mBERT | 8σ above null | 0.005 | 0.017 |
-| XLM-R-base | 8σ above null | 0.005 | 0.005 |
-| JP-BERT-char | 2σ above null | 0.020 | 0.033 |
+We constructed cloze items procedurally from frequency rank within hand-curated semantic fields. The procedural construction means that the radical-correct and within-field distractor sets were not author-selected to favor any model; both sets are simply the top-k most frequent characters that meet the procedural criterion. The hand curation enters only at the level of which fields exist, and that set was locked before the procedural items were generated.
 
-### 5.4 Cross-Script Transfer
+### 5.4 Specificity, frequency, and architecture controls
 
-JP-BERT-char, trained only on Japanese text, scored on the 1,687 Joyo kanji shared with our dataset, produces *d* = 0.384 (*p_perm* < 0.001). On the *same character subset*, Chinese-BERT yields *d* = 0.405, mBERT *d* = 0.291, XLM-R-base *d* = 0.169. Within sampling noise, JP-BERT and Chinese-BERT are equivalent on the kanji subset. The Kangxi system is doing real geometric work that does not depend on Chinese pretraining.
+The pseudoradical, frequency-matched, and random-init controls all behave as predicted by the radical hypothesis (H3, H1c, H1d):
 
-### 5.5 Cloze Probe — Behavioral Validation
+- All ten models clear the size-matched pseudoradical null (p_pseudo ≤ 0.020). The radical effect is specific to Kangxi categories, not to any 68-group partition with the same size distribution.
+- Frequency inflation (the gap between unmatched-d and frequency-decile-matched-d) is small for all models. It is largest for the vision-only baseline (0.077, ~6.4% of the unmatched effect, attributable to the fact that more frequent characters are drawn more often in pretraining and thus have more visually stable renderings) and ERNIE-3.0 (0.053). For the modern Chinese-specialized models it is between 0.015 and 0.029. The radical effect is not driven by character frequency.
+- Random-initialized Chinese-BERT and XLM-R-base both yield d ≈ −0.04 with permutation p > 0.88, confirming that the geometric signal originates in pretraining rather than in architecture.
 
-Table 4 reports cloze-probe results across 7 models (BGE excluded — no LM head; vision baseline excluded — no LM). Each model is scored on 8 fields × 4 cloze contexts × 10 candidates (5 target + 5 distractor). We report mean Δ log P(target − distractor), top-1 rate (target's max log-prob > distractor's max), and mean reciprocal rank of the first target candidate.
+### 5.5 Cross-script generalization
 
-| Model | Family | mean Δ log P | top-1 rate | MRR |
-|---|---|---|---|---|
-| **Qwen2.5-3B** | causal | **+0.36** | 0.54 | 0.70 |
-| **Qwen2.5-1.5B** | causal | **+0.20** | 0.63 | 0.77 |
-| **Chinese-BERT** | MLM | **+0.16** | 0.65 | 0.74 |
-| MacBERT-base | MLM | −0.21 | 0.49 | 0.66 |
-| mBERT | MLM | −0.98 | 0.49 | 0.61 |
-| XLM-R-base | MLM | −0.99 | 0.45 | 0.59 |
-| XLM-R-large | MLM | −1.18 | 0.42 | 0.59 |
+Of 6,306 characters in our dataset, 1,687 appear in the Joyo kanji list. We re-extract embeddings for these characters from the Japanese-pretrained JP-BERT-char and from each Chinese model. JP-BERT-char shows d = 0.384 on the Joyo subset; Chinese-BERT shows d = 0.405 on the same subset; Qwen2.5-3B shows d = 0.682. The Japanese model is not the strongest performer on Japanese kanji: Qwen2.5-3B, trained predominantly on Chinese text, encodes the Joyo radical structure more strongly. We read this as evidence that the Kangxi system, despite being a Chinese-centric organization, transfers across pretraining language. We caution that JP-BERT-char's lower coverage of single tokens (64.3%) and its smaller model size make this a within-architecture-family rather than a fully controlled cross-language comparison.
 
-**The cloze ranking matches the geometric ranking.** Qwen2.5-3B leads, Qwen2.5-1.5B follows, Chinese-BERT is the only MLM with positive Δ log P, and the multilingual MLMs all *anti-prefer* target candidates. In the multilingual encoder family the scaling law inverts: XLM-R-large is *worse* than mBERT, which is worse than Chinese-BERT despite having far fewer parameters. The natural interpretation: multilingual training spreads the radical signal across many scripts, and the larger you scale that pretraining the worse single-script radical knowledge gets.
+### 5.6 The form-specific residual
 
-The Δ log P difference between Qwen2.5-3B and XLM-R-large is 1.54 nats — an enormous behavioral gap that the geometric measurements predicted before we observed it.
+A natural prior is that any radical-aligned signal must come from visual form, since radicals are graphemic units. The data falsify this prior. The vision-only baseline (frozen ResNet-18 over rendered glyphs) shows d = 1.141 at the corpus level, but its `d_form_specific` (the signal that survives semantic-field control) is −0.08 — slightly negative. In contrast, Chinese-BERT shows `d_form_specific` = +0.24, MacBERT +0.21, and ERNIE-3.0 +0.27. The form-specific residual is largest in three glyph-naive distributional models, not in the only model that actually sees rendered form. The interpretation: rendered form gives a large corpus-scale d but it is fully accounted for by within-field similarity in the same font; the additional signal that survives semantic control comes from distributional regularity correlated with radical identity, available only to models that see Chinese text.
 
-### 5.6 Layer-Wise Emergence
+### 5.7 Layer-wise dynamics and the static-embedding leak
 
-For mBERT and Chinese-BERT we extract every layer (the rest of the models use 5-layer sampling). For Chinese-BERT, *d* peaks at layer 1 (0.505) and decays monotonically through layer 12 (0.375). For mBERT, *d* peaks at layer 7 (0.231) — a more typical mid-layer pattern — before decaying to 0.202 at layer 12. The reason for the difference is probably that Chinese-BERT receives mostly Chinese text and starts encoding radical structure at its tokenizer-level static embedding; mBERT, multilingual, has to integrate it via context.
-
-For all models the embedding layer (layer 0) shows non-trivial cohesion; we discuss this as the *static-lookup signal* and address its implications in §6.
-
-### 5.7 Probing — Radical vs Semantic Field
-
-Linear logistic probes trained at each layer to predict (a) Kangxi radical from char embedding and (b) semantic field from char embedding. Highlights at the last layer:
-
-- Vision baseline: radical macro-F1 = **0.79**, semantic-field F1 = 0.45 — vision sees radical, not field.
-- Chinese-BERT: radical = 0.36, field = **0.55** — distributional models see field better than radical.
-- mBERT: radical = 0.31, field = **0.48** — same pattern.
-- XLM-R-base: radical = 0.17, field = **0.35** — same pattern.
-
-This confirms a clean dissociation: the only condition where radical-probing exceeds field-probing is the form-only baseline. In every distributional model the model knows the field better than it knows the radical, even though it organizes pairwise cosine partly by radical (§5.2). The right interpretation: distributional training learns radicals *as a means of organizing fields*, not as features in their own right.
-
-### 5.8 Compositionality (Orthographic Arithmetic)
-
-We test whether E(*c*) − E(R₁) + E(R₂) retrieves R₂-radical characters under cosine ranking, for every pair of anchor radicals (R₁, R₂) whose unified-CJK glyph is in the dataset. Mean retrieval lift over chance (top-10 rate / baseline rate) per model:
-
-| Model | mean lift |
-|---|---|
-| Chinese-BERT | **18.3×** |
-| JP-BERT-char | 10.0× |
-| XLM-R-base | 9.0× |
-| ResNet-18 (vision) | 8.0× |
-| mBERT | 5.2× |
-
-Every distributional model substantially exceeds chance (lift > 5×), consistent with linear compositionality of radical components. Chinese-BERT's lead — 18.3× — is striking: vector arithmetic on its embeddings retrieves target-radical chars an order of magnitude more often than random.
-
----
+For most models the peak-d layer is shallow, often layer 0 (the token embedding lookup before any contextualization). Layer-0 d ranges from 0.192 (mBERT) to 1.141 (vision-only). This suggests a substantial fraction of the radical-aligned geometry sits in the static-embedding table rather than in contextual representation. We flag this rather than hide it: a portion of what we are measuring is essentially "how the tokenizer's vocabulary is laid out," not "what the deeper layers learned about characters." For Chinese-BERT and mBERT, where we extracted all 13 layers, peak-d is at layer 1 and layer 7 respectively; for the others, the 5-layer sample is too coarse to localize the peak with confidence. We mark this as a methodological limitation in Section 7.
 
 ## 6. Discussion
 
-### 6.1 Three Channels of the Radical Signal
+### 6.1 What the data say
 
-Our results decompose the radical effect into three quantitatively distinct channels.
+The four modern Chinese-specialized models we tested show a partial-R² ordering with `same_radical` above `ppmi`. The other six models do not. We resist three over-readings.
 
-**Channel 1 — Pure form** (vision baseline). Cohen's *d* = 1.14, but partial R² is dominated by `same_radical` (0.034) and `stroke_diff` (0.011), with PPMI essentially zero. Same-radical chars in the same font *look like* same-field chars in the same font; the channel does not separate radical from field in the way distributional training does (within-field *d* under semantic control = +1.22, *higher* than corpus-wide *d* = 1.14 — visual rendering treats radical and field as nearly the same axis).
+First, we are not claiming that "modern Chinese LLMs encode radicals." The ratio above 1.7 for three Qwen and BGE means radical co-membership predicts cosine geometry better than PMI does in those four models, on this dataset, after frequency and stroke controls, with cluster-robust standard errors. It does not mean the model has a mechanism for radicals. Mechanism is a separate question that requires causal interventions (activation patching, attention-head ablation, neuron-level analysis); we did not run those experiments.
 
-**Channel 2 — Distributional context** (most distributional models, dominantly Chinese-BERT, JP-BERT). Cohen's *d* in the 0.06–0.40 range. Variance decomposition has partial R²(*ppmi*) ≥ partial R²(*same_radical*). The radical clustering in these models is a downstream consequence of distributional training — characters that share radicals also share contexts, and the model picks up the latter directly.
+Second, the four "modern Chinese-specialized" models are a small set. With n = 4, the category effect is suggestive but not statistically firm. We report it as a pattern in the data and identify candidate model families (Yi, DeepSeek, GLM-4, InternLM, Qwen2.5-7B and larger) where the same analysis should be replicated. None of those fit on free GPU at full precision; we flag this as the single largest scope limitation.
 
-**Channel 3 — Radical-as-primary** (Qwen2.5, BGE). Cohen's *d* in the 0.57–0.74 range. Variance decomposition has partial R²(*same_radical*) > partial R²(*ppmi*). The radical clustering in these models is *not* primarily distributional. We don't have a definitive mechanistic explanation, but we see two converging hypotheses: (i) BBPE tokenization in Qwen splits some characters into multiple subwords whose sequence statistics may reinforce radical structure beyond what whole-character co-occurrence captures; (ii) contrastive training (BGE) over Chinese text optimizes a representation where radical-shared chars cluster directly because they're semantically near in retrieval contexts. Both mechanisms are amenable to further interpretability work.
+Third, the cloze-probe correlation with the variance decomposition is striking but is also driven by a small set of behavioral measurements (eight fields, five characters per condition, ten contexts per field, ~250 trials in total). A larger benchmark with inter-annotator agreement on context naturalness and a wider set of fields would be a clean follow-up.
 
-### 6.2 Why Multilingual Scaling *Inverts* the Cloze Ranking
+### 6.2 The theoretical picture, hedged
 
-The cloze probe's most striking finding is that XLM-R-large is *worse* than XLM-R-base, which is worse than mBERT (Δ log P: −1.18 < −0.99 < −0.98). All three are anti-preferring radical-aligned targets. We interpret this as a multilingual *interference* effect: as the multilingual encoder grows, it stretches its character-level priors across more languages, so its per-character probability mass for any particular Chinese radical shrinks. The geometric *d* for XLM-R-large is similar to XLM-R-base in our extraction (and we caveat that we did not run XLM-R-large in the full geometric pipeline — only in the cloze probe), but the LM-head behavior diverges sharply. **Multilingual scaling is bad for Chinese radical knowledge.** Within a single-language family (Qwen-1.5B → Qwen-3B), scaling helps: Δ log P rises from +0.20 to +0.36.
+If the pattern in the variance decomposition is real and replicates on additional Chinese-specialized models, the natural reading is that pretraining on Chinese text at scale induces co-occurrence regularities that correlate with radical identity beyond what semantic context alone explains. Same-radical characters appear in similar morphological contexts (compound formation, classifier patterns, idiomatic frames) that are not captured by a simple PMI window of 5. Multilingual encoders, whose Chinese-text exposure is a fraction of their total training, do not learn this regularity to the same degree. The effect is not visual: the only model that sees pixels (the ResNet-18 baseline) has zero form-specific residual after semantic-field matching. The effect emerges from pretraining and grows with Chinese-specific scale (Qwen2.5-3B > Qwen2.5-1.5B > Chinese-BERT on every metric we report).
 
-### 6.3 What This Says About Logographic Scripts More Broadly
+We do not observe the same scaling law in multilingual encoders. XLM-R-large is worse than XLM-R-base on the cloze probe. Adding parameters to a multilingual MLM dilutes whatever Chinese-specific structure was there at the smaller scale, presumably because the larger model spreads its representational budget across 100 languages. This pattern is consistent with prior findings on the cost of multilinguality but is not load-bearing for our main claim.
 
-Our framework — a four-way variance decomposition tied to a behavioral cloze probe — generalizes directly to other logographic and semi-logographic systems: Korean Hanja (subset of Han characters, partly distributional shift), Japanese kanji (we already cover this), Egyptian hieroglyphs (logographic + phonetic), Mayan glyphs. The combination of geometric cohesion measurement and variance decomposition gives a quantitative answer to "does this model encode structure X" that does not depend on whether structure X is morphological, orthographic, or semantic in origin. We see this method as the contribution most likely to be reused.
+### 6.3 Generalization to other writing systems
 
-### 6.4 The Static-Lookup Signal
+The methodology generalizes. For Japanese kanji, we already showed the partial replication on Joyo. For Korean Hanja, the same pipeline could run on a Korean-specific encoder; the radicals are unchanged and the dataset construction is mechanical. For non-CJK logographic systems (Egyptian hieroglyphs, Mayan glyphs), the dataset is the bottleneck rather than the analysis: there is no Unihan equivalent. We release the variance-decomposition pipeline as standalone code so that any future study can apply it.
 
-In all three of the "radical-as-primary" models (Qwen2.5-1.5B/3B, BGE) we find substantial radical cohesion already at the **embedding layer (layer 0)**. This is mathematically inevitable for any model whose tokenizer embedding has any radical-aligned structure: the layer-0 representation *is* the embedding. We disclose this in §5.1 and treat it as part of the model's representation, not a confound. A reviewer could reasonably argue we should also report cohesion at layer ≥ 1 *exclusively* to isolate contextualization. We do report layer-by-layer numbers for mBERT and Chinese-BERT in §5.6 and observe that the layer-0 effect is large for Chinese-BERT and small for mBERT, consistent with the expectation that Chinese-specialized tokenizers embed radical structure at the lookup level.
+## 7. Limitations
 
-### 6.5 Connection to the Variance-Decomposition Story
+We list the ones we know about and the ones reviewers of earlier versions identified.
 
-Channel 3 models (Qwen, BGE) carry the most form-specific signal *not* because they have visual access (they don't), but because their training procedures concentrate radical-aligned character clustering in places where distributional context would not. The variance decomposition makes this visible: their `partial_R²(same_radical)` exceeds `partial_R²(ppmi)`, reversing the ordering for older multilingual encoders. The training-time mechanism is open — it could be BBPE tokenization, contrastive loss, sheer scale, or some combination — and is the most natural follow-up question.
+**Pair non-independence in the regression.** Each character appears in approximately 63 of the 200,000 sampled pairs, so observations are not independent. We address this with two-way cluster-robust standard errors clustering on both characters of each pair (Cameron, Gelbach, and Miller 2011). The point estimates of beta are unchanged from naive OLS; the standard errors widen, correctly, by a factor of 1.05 to 2.66 (the design effect). Significance survives the correction in every case, but readers should attend to the cluster-robust 95% confidence intervals reported in `variance_decomposition_clustered.csv` rather than to the naive p-values.
 
----
+**Modest absolute variance explained.** Full R² of the four-predictor regression ranges from 0.002 to 0.050. We are decomposing a residual after most of the cosine variance is already absorbed by per-character idiosyncrasies. The partial-R² ratio is interpretable, but readers should not read the absolute partial-R² as "how much of the embedding geometry is radicals." A useful calibration would be to add a model-internal predictor (e.g., static-embedding cosine of the same characters) and report what fraction of the residual after that predictor is captured by `same_radical`. We did not run this and flag it as a follow-up.
 
-## 7. Preregistration Reconciliation
+**XLM-R-base subword pooling.** XLM-R has 0.4% single-token coverage of our character set. We extract by mean-pooling subword spans, which conflates the SentencePiece decomposition with the character identity. XLM-R's coefficients in the variance decomposition should be read as descriptive of this pooled representation rather than as a direct competitor to the Chinese-tokenized models. The substantive comparison "modern Chinese-specialized vs older multilingual" does not depend on XLM-R's exact ranking.
 
-Before observing the 8-model results, we preregistered fourteen primary hypotheses (H1a–H7b). Of these:
+**Small set of Chinese-specialized models.** Four (Chinese-BERT, MacBERT, ERNIE-3.0, BGE-large-zh) is more than the n = 3 of an earlier draft of this work, but it is still a small category. We report the pattern as suggestive. Closing the n problem requires Chinese-pretrained LLMs that fit on free GPU, which is a current bottleneck in open-weights releases at the 6-14B scale.
 
-- **Supported (10):** H1b (PPMI > same_radical for distributional models — supported for Chinese-BERT, JP-BERT, XLM-R-base; reversed only for Qwen, BGE, vision); H1c (frequency-matched *d* < unmatched); H1d (pseudoradical *p* < 0.05); H2a (vision *d* > 0.20 under semantic control); H2b (vision partial R²(*stroke* or *same_radical*) > partial R²(*ppmi*)); H3 (random-init *d* ≈ 0); H4a (Japanese *d* > 0); H6a (radical F1 < field F1 in standard encoders); H6b (radical F1 > field F1 in vision); H7b (lift > 3 in vision).
+**No mechanistic / causal experiment.** Our variance decomposition is associational. We do not claim that any model contains a radical-detector circuit. A direct test would be activation patching at scale, attention-head localization with counterfactual ablation, or neuron-level analysis on Qwen2.5-3B. We sketched a small-scale geometric ablation in `activation_patching.py` but did not include it as a core result because the geometric ablation does not support strong causal claims.
 
-- **Falsified (4):** H1a (semantic-control *d* ≈ 0 in standard models — false for Chinese-BERT and JP-BERT); H2c (vision has the largest *d_form_specific* — *false*: Chinese-BERT has largest, vision is negative); H5a (peak at middle layer — false: 5 of 8 models peak at or near layer 0); H7a (lift < 2 in standard models — false; lift > 5 for all).
+**No inter-annotator agreement on cloze contexts.** The procedural construction removes selection bias from the target/distractor split, but the contexts themselves were written by the author. Whether the contexts read as natural Chinese to a native reader is not validated. We flag this as a methodological gap. The remedy is a 20-minute task for one Chinese-fluent collaborator: rate each of the 21 contexts on naturalness and confirm whether the procedurally-generated targets and distractors are plausible completions. We will add this in any revision before venue submission.
 
-- **Reframed (1):** H4a's quantitative prediction (Japanese *d* < Chinese-BERT *d* on the same subset) is partially wrong — they are statistically equivalent.
+**Layer sampling.** For eight of ten models we extracted only 5 layers. Peak-d location is therefore approximate for most of the model set. Full-resolution layer-wise analysis is in `layer_wise.csv` for mBERT and Chinese-BERT only.
 
-The four falsifications all point in the same direction: the radical signal is *more* robust than we predicted, lives in more varied places, and behaves more linearly than a "small-effect, mostly semantic" view would suggest.
+**Single sentence corpus for PMI.** The PMI predictor uses 1M Wikipedia zh sentences. Wikipedia is encyclopedic and biased away from spoken Chinese; a colloquial corpus might yield different PMI values. We do not believe this changes the relative ordering across models (which use a fixed PMI value as a covariate) but it might affect the absolute partial-R² values.
 
----
+**fp16 inference.** All embeddings were extracted in bf16 to fit within free-tier GPU memory. fp32 extraction would give slightly more precise cosines, on the order of 10^-3 to 10^-2 in absolute value, which is well below our reported effect sizes but worth noting for replicators.
 
-## 8. Limitations
+## 8. Conclusion
 
-**Layer sampling.** Six of eight models use 5-evenly-spaced-layer sampling rather than full per-layer extraction (mBERT and Chinese-BERT are full-resolution). Conclusions about "peak layer" for the sampled models may shift if the true peak is between sampled layers. Where this matters most is the cross-script and Qwen models; we note in §5.6 that the qualitative shape of the layer-wise *d* curve survives full-resolution validation for the two models we did expand.
+We decomposed pairwise embedding cosine in ten transformer models into four channels: radical co-membership, distributional context, character frequency, and stroke difference. With cluster-robust standard errors and a procedural cloze probe for behavioral validation, we found that four modern Chinese-specialized models (Qwen2.5-1.5B, Qwen2.5-3B, BGE-large-zh, Chinese-BERT-on-some-metrics) show partial-R²(radical) at or above partial-R²(PMI), while older multilingual encoders show the reverse or near-zero. The cloze probe predicts the same ordering. The effect is Kangxi-specific (size-matched random partitions yield zero), training-driven (random-init networks yield zero), and not attributable to character frequency, stroke count, or visual form alone.
 
-**fp16 inference.** We ran extraction in fp16 on T4 (bf16 where available). Quantization-noise ablations are not reported. The variance decomposition is at most weakly affected (partial R² rankings are scale-invariant to small perturbations).
+We refrain from claiming that modern Chinese LLMs encode radicals as a primary axis. The data say something more careful: in our test set of four Chinese-specialized models, radical co-membership is a stronger predictor of pairwise cosine geometry than distributional PMI is, and this geometric ordering predicts behavior on a cloze task. We hope replication on a wider set of Chinese-pretrained LLMs and a mechanistic follow-up using activation patching will confirm or constrain this pattern.
 
-**Fast-subset.** Eight models is far short of the full Chinese-NLP zoo. We deliberately omitted MacBERT, ERNIE-3.0, the UER-tiny/small scaling subset, ChineseBERT-glyph (which fails to load on transformers ≥ 5.0), JP-BERT-subword, and any LLM larger than 3B (won't fit unquantized on T4). The 8-model subset was chosen to cover every reviewer category (multilingual, Chinese-specialized, retrieval, decoder LLM, cross-script, vision) within a 90-minute free-tier compute budget. Full pipeline reproduction at higher fidelity (e.g., 14 models × 13 layers × full-precision extraction) would require a paid GPU instance.
+## Reproducibility
 
-**Cloze-probe field count.** Eight semantic fields × 5 target chars × 5 distractors is a small probe set by modern benchmark standards. Our pre-specified analysis pools across fields to control for this; per-field results in the appendix vary in expected ways.
+All code, the preregistration document (timestamped before any real-data runs), the procedural cloze items, the 6,306-character dataset with stroke counts and liushu annotations, and every analysis CSV from this paper are available at:
 
-**Interpretability of partial R².** Our variance decomposition is a population-level OLS — it tells us how much *cosine* covaries with each predictor in the marginal sense. It does not directly localize the signal to specific layers or attention heads. We see causal-tracing follow-ups as natural extensions.
+`https://github.com/aryan35790jp/chinese_llm`
 
-**Single-language pretraining for "cross-script" claim.** JP-BERT-char is trained only on Japanese, but the kanji it sees overlap heavily with the same characters in other CJK contexts. We claim "cross-script transfer" in the sense that pretraining on a different *language* reusing the *same script* preserves the radical signal — not in the strong sense of transferring across writing systems.
-
----
-
-## 9. Reproducibility
-
-The complete pipeline is released:
-
-- 14-model configuration with an 8-model fast subset (`scripts/new/config.py`).
-- 12 analysis scripts and 4 smoke-test suites (40 source files, ~5,000 LOC).
-- Single-cell Colab notebook (`notebooks/colab_run.ipynb`) that reproduces every CSV in this paper from scratch on a free T4 in ≈90 minutes.
-- Auto-generated analysis report (`scripts/new/results_report.py`) that regenerates Tables 2–5 from the released CSVs.
-- Preregistration document (`paper/preregistration.md`) committed before any 8-model results were observed.
-- All 21 result CSVs and 32 figures included in the release.
-
----
-
-## 10. Conclusion
-
-We provide a unified four-way variance decomposition that adjudicates among form, semantics, distributional context, and frequency as candidate sources of Kangxi radical structure in eight Chinese language models. We find that modern Chinese decoder LLMs (Qwen2.5-1.5B, Qwen2.5-3B) and a production retrieval encoder (BGE-large-zh-v1.5) encode radical structure as a *primary* geometric axis — partial R²(*same_radical*) exceeds partial R²(*ppmi*) — while older Chinese and multilingual encoders show the reverse. The signal is Kangxi-specific (pseudoradical *p* ≤ 0.005), training-driven (random-init *d* ≈ 0), and not a frequency artifact (*Δd* < 0.04 under matching). It transfers across scripts (JP-BERT *d* = 0.38 on Joyo kanji ≈ Chinese-BERT *d* = 0.40 on the same chars). And it predicts language-model behavior — the cloze-probe ranking matches the geometric ranking, with Qwen2.5-3B preferring radical-aligned targets by Δ log P = +0.36 and multilingual encoders anti-preferring them by Δ ≤ −0.98.
-
-For Chinese NLP, the practical takeaway is that radical structure is a measurable, scaling-sensitive feature of modern Chinese-specialized models, *not* of multilingual encoders, *not* of pure visual rendering, and *not* an artifact of frequency. For interpretability research more broadly, our four-way decomposition is a methodological template that generalizes to any logographic or semi-logographic script and to any future model whose internal representations one wishes to attribute among orthographic, semantic, distributional, and frequency channels.
-
----
+Total compute for the full pipeline: approximately 2 hours 20 minutes on a free Colab T4 GPU, hands-off after the notebook's Run All. The longest single step is 50 minutes of embedding extraction across the ten models.
 
 ## References
 
-Chi, E. A., Hewitt, J., & Manning, C. D. (2020). Finding universal grammatical relations in multilingual BERT. In *Proceedings of ACL 2020*, 5564–5577.
+Cameron, A. C., Gelbach, J. B., and Miller, D. L. (2011). Robust inference with multiway clustering. *Journal of Business & Economic Statistics* 29(2), 238–249.
 
-Conneau, A., et al. (2020). Emerging cross-lingual structure in pretrained language models. In *Proceedings of ACL 2020*, 6022–6034.
+Cui, Y., Che, W., Liu, T., Qin, B., Yang, Z., Wang, S., and Hu, G. (2021). Pre-training with whole word masking for Chinese BERT. *IEEE/ACM Trans. Audio, Speech, Lang. Process.* 29, 3504–3514.
 
-Cui, Y., et al. (2021). Pre-training with whole word masking for Chinese BERT. *IEEE/ACM Transactions on Audio, Speech, and Language Processing*, 29, 3504–3514.
+Durrani, N., Sajjad, H., Dalvi, F., and Belinkov, Y. (2019). One size does not fit all: Comparing NMT representations of different granularities. *NAACL-HLT*, 791–796.
 
-Ethayarajh, K. (2019). How contextual are contextualized word representations? Comparing the geometry of BERT, ELMo, and GPT-2 representations. In *Proceedings of EMNLP 2019*, 55–65.
+Ethayarajh, K. (2019). How contextual are contextualized word representations? Comparing the geometry of BERT, ELMo, and GPT-2 representations. *EMNLP*, 55–65.
 
-Hewitt, J., & Manning, C. D. (2019). A structural probe for finding syntax in word representations. In *Proceedings of NAACL 2019*, 4129–4138.
+Hewitt, J., and Manning, C. D. (2019). A structural probe for finding syntax in word representations. *NAACL-HLT*, 4129–4138.
 
-Hofmann, V., Pierrehumbert, J. B., & Schütze, H. (2021). Superbizarre is not superb: Derivational morphology improves BERT's interpretation of complex words. In *Proceedings of ACL 2021*, 3594–3608.
+Hofmann, V., Pierrehumbert, J. B., and Schütze, H. (2021). Superbizarre is not superb: Derivational morphology improves BERT's interpretation of complex words. *ACL*, 3594–3608.
 
-Levy, O., & Goldberg, Y. (2014). Neural word embedding as implicit matrix factorization. In *Advances in Neural Information Processing Systems*, 27, 2177–2185.
+Levy, O., and Goldberg, Y. (2014). Neural word embedding as implicit matrix factorization. *NeurIPS*.
 
-Meng, Y., et al. (2019). Glyce: Glyph-vectors for Chinese character representations. In *Advances in Neural Information Processing Systems*, 32, 2746–2757.
+Meng, Y., Wu, W., Wang, F., Li, X., Nie, P., Yin, F., Li, M., Han, Q., Sun, X., and Li, J. (2019). Glyce: Glyph-vectors for Chinese character representations. *NeurIPS* 32, 2746–2757.
 
-Mikolov, T., Chen, K., Corrado, G., & Dean, J. (2013). Efficient estimation of word representations in vector space. In *ICLR Workshop*.
+Mu, J., and Viswanath, P. (2018). All-but-the-top: Simple and effective postprocessing for word representations. *ICLR*.
 
-Mu, J., & Viswanath, P. (2018). All-but-the-top: Simple and effective postprocessing for word representations. In *International Conference on Learning Representations*.
+Sun, Z., Li, X., Sun, X., Meng, Y., Ao, X., He, Q., Wu, F., and Li, J. (2021). ChineseBERT: Chinese pretraining enhanced by glyph and pinyin information. *ACL*, 2065–2075.
 
-Sun, Z., et al. (2021). ChineseBERT: Chinese pretraining enhanced by glyph and Pinyin information. In *Proceedings of ACL 2021*, 2065–2075.
+Tenney, I., Das, D., and Pavlick, E. (2019). BERT rediscovers the classical NLP pipeline. *ACL*, 4593–4601.
 
-Tenney, I., Das, D., & Pavlick, E. (2019). BERT rediscovers the classical NLP pipeline. In *Proceedings of ACL 2019*, 4593–4601.
+Xu, J., Liu, J., Zhang, L., Li, Z., and Chen, H. (2016). Improve Chinese word embeddings by exploiting internal structure. *NAACL-HLT*, 1041–1050.
 
-Xu, J., et al. (2016). Improve Chinese word embeddings by exploiting internal structure. In *Proceedings of NAACL 2016*, 1041–1050.
-
-Yu, J., et al. (2017). Joint embeddings of Chinese words, characters, and fine-grained subcharacter components. In *Proceedings of EMNLP 2017*, 286–291.
-
-Qwen Team (2024). Qwen2.5 Technical Report. Alibaba DAMO Academy.
-
-BAAI (2023). BGE-large-zh-v1.5: A Chinese retrieval encoder. Beijing Academy of Artificial Intelligence.
-
----
-
-## Appendix A: Preregistration Document
-
-Reproduced verbatim from `paper/preregistration.md` (committed before 8-model results were observed). Available in the project repository.
-
-## Appendix B: Tokenization Audit Table
-
-Full per-model, per-character tokenization classification (single-token, multi-token, unknown) for all 6,306 characters. CSV file `results/tokenization_audit.csv` (44,142 rows).
-
-## Appendix C: Per-Field Cloze Results
-
-Per-field log-probability differences for all 8 fields × 7 LM-capable models. CSV file `results/radical_cloze.csv`.
-
-## Appendix D: Full Variance Decomposition
-
-Per-predictor β, SE, *t*, *p*, partial R², full R² for all 8 models × 4 predictors (32 rows). CSV file `results/variance_decomposition.csv`.
-
-## Appendix E: All Figures
-
-20 PNG and 12 PDF figures generated by `scripts/new/figures.py`, including the centerpiece layer-wise *d* plot, the variance-decomposition stacked bars, the per-radical cohesion boxplot, the cloze-probe horizontal bar chart, and PCA/UMAP projections of last-layer embeddings colored by top-12 radicals.
+Yu, J., Jian, X., Xin, H., and Song, Y. (2017). Joint embeddings of Chinese words, characters, and fine-grained subcharacter components. *EMNLP*, 286–291.
