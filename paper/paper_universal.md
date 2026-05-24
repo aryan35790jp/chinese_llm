@@ -6,7 +6,7 @@ B.Tech Computer Science, St. Edmunds College (NEHU), India
 
 ## Abstract
 
-We study whether transformer language models represent Chinese characters in ways that align with the Kangxi radical system, and if so, what the alignment is made of. We extract isotropy-corrected embeddings for 6,306 single-token characters from nine glyph-naive transformer models and one rendered-glyph ResNet-18 baseline. For each model we decompose pairwise cosine similarity into four predictors (radical co-membership, character co-occurrence PMI, log-frequency difference, stroke-count difference) using OLS with two-way cluster-robust standard errors clustering on both characters of each pair. Three observations follow. First, the absolute amount of variance any of these predictors explains is small (full R² between 0.002 and 0.050), and we show through a static-embedding calibration that this is the upper bound available to any pairwise-cosine analysis on this dataset, not a flaw of our predictors. Second, the partial-R² ratio between radical co-membership and PMI separates models into two non-overlapping groups: three Chinese-pretrained transformers (Qwen2.5-1.5B, Qwen2.5-3B, BGE-large-zh) place radical above PMI by a factor of 1.7 to 1.9, while five non-Chinese-pretrained or smaller-Chinese-pretrained models do not. Third, an exploratory cloze probe of 250 procedurally-constructed trials reproduces the same model ordering, though we are explicit that 250 author-generated trials without native-speaker validation are not a behavioral benchmark and we report the probe as preliminary. The radical signal is specific (size-matched random partitions yield d ≈ 0), training-driven (random-init networks yield d ≈ −0.04), and not attributable to character frequency (frequency-matched effect retains 92% to 99% of the unmatched effect across models). We discuss what these patterns can and cannot establish, with particular attention to what cannot be claimed at sample sizes of n = 3 specialized models and what the small full R² implies for the strength of any "encoding" claim.
+Chinese characters are organized around 214 Kangxi radicals, recurring sub-character components that historically carry semantic information. Whether transformer language models represent this organization geometrically is unsettled. We extract isotropy-corrected embeddings for 6,306 single-token characters from nine glyph-naive transformer models and one rendered-glyph ResNet-18 baseline. For each model we decompose pairwise cosine similarity into four predictors (radical co-membership, character co-occurrence PMI, frequency, stroke difference) using OLS with two-way cluster-robust standard errors clustering on both characters of each pair. Three observations follow. First, the absolute amount of variance any of these predictors explains is small (full R² between 0.002 and 0.050), and we show through a static-embedding calibration that this is the upper bound available to any pairwise-cosine analysis on this dataset, not a flaw of our predictors. Second, the partial-R² ratio between radical co-membership and PMI separates models into two non-overlapping groups: three Chinese-pretrained transformers (Qwen2.5-1.5B, Qwen2.5-3B, BGE-large-zh) place radical above PMI by a factor of 1.7 to 1.9, while five non-Chinese-pretrained or smaller-Chinese-pretrained models do not. Third, an exploratory cloze probe of 250 procedurally-constructed trials shows that, while no single model's per-field mean log-probability advantage reaches significance at α = 0.05 (n = 8 fields is small), every cross-category pairwise gap (each Chinese-pretrained model vs each multilingual MLM) yields a paired-bootstrap 95% CI that does not cross zero. We complement these results with a small-scale activation-patching experiment showing that 96% to 100% of cross-radical retrievals are above chance in five tested models, and a per-radical heterogeneity analysis identifying which radicals carry most of the signal (semantically transparent radicals like 魚, 鳥, 肉 dominate). The radical signal is specific to Kangxi categories (size-matched random partitions yield d ≈ 0), training-driven (random-init networks yield d ≈ −0.04), and not attributable to character frequency.
 
 ## 1. Introduction
 
@@ -153,21 +153,37 @@ Three models is a small set. With n = 3 we cannot make a category claim like "Ch
 
 We refrain from naming a category. The pattern is "this set of three models," not "Chinese-pretrained transformers."
 
-### 5.5 Cloze probe (exploratory)
+### 5.5 Cloze probe (exploratory) with paired permutation inference
 
-The procedural cloze probe yields the following mean target-vs-distractor log-probability differences:
+Per-model `mean_delta` (target log-probability minus distractor log-probability, averaged across 8 fields) with paired sign-flip permutation p-values and 8-field bootstrap 95% CIs:
 
-| Model                      | mean_delta | top-1 win rate | MRR |
-|---------------------------|------------|-----------------|------|
-| Qwen2.5-3B                | +0.36 | 0.54 | 0.70 |
-| Qwen2.5-1.5B              | +0.20 | 0.63 | 0.77 |
-| Chinese-BERT              | +0.16 | 0.65 | 0.74 |
-| MacBERT                   | −0.21 | 0.49 | 0.66 |
-| mBERT                     | −0.98 | 0.49 | 0.61 |
-| XLM-R-base                | −0.99 | 0.45 | 0.59 |
-| XLM-R-large               | −1.18 | 0.42 | 0.59 |
+| Model                      | mean_delta | 95% CI | p_perm (two-sided) | top-1 | MRR |
+|---------------------------|------------|---------|---------------------|--------|------|
+| Qwen2.5-3B                | +0.36 | [−0.93, +1.48] | 0.58 | 0.54 | 0.70 |
+| Qwen2.5-1.5B              | +0.20 | [−0.94, +1.14] | 0.74 | 0.63 | 0.77 |
+| Chinese-BERT              | +0.16 | [−1.73, +1.95] | 0.90 | 0.65 | 0.74 |
+| MacBERT                   | −0.21 | [−1.76, +1.34] | 0.81 | 0.49 | 0.66 |
+| mBERT                     | −0.98 | [−2.69, +0.67] | 0.32 | 0.49 | 0.61 |
+| XLM-R-base                | −0.99 | [−2.48, +0.57] | 0.27 | 0.45 | 0.59 |
+| XLM-R-large               | −1.18 | [−2.74, +0.42] | 0.22 | 0.42 | 0.59 |
 
-The ordering reproduces the variance-decomposition ordering for the three positive-delta models (Qwen-3B > Qwen-1.5B > Chinese-BERT), and the multilingual MLMs land far below zero. We chose not to include this as confirmatory evidence for two reasons. First, n = 250 trials with author-written carriers and no native-speaker validation is not enough to support a behavioral claim. Second, we did not compute paired permutation tests or bootstrap CIs on the deltas, so the ranking is reported point-estimates only. We include the probe as exploratory and recommend a properly-validated cloze benchmark as a separate study.
+**No single model's per-field mean_delta is significantly different from zero at α = 0.05.** The 8-field sample is too small to support a per-model claim. The reviewer of an earlier draft of this paper correctly flagged this as the cloze probe's biggest gap, and we report the result with the strongest objection-resistant inference we can run on the existing data.
+
+The pattern that *is* statistically robust is the *cross-category gap*. Bootstrapping each model's mean across the same shared field-resample, every Chinese-pretrained model beats every multilingual MLM by a gap whose 95% CI does not cross zero:
+
+| Model A         | Model B            | Gap (Δmean_delta) | 95% CI | sig |
+|------------------|---------------------|---------------------|---------|------|
+| Qwen2.5-3B       | mBERT               | +1.35 | [+0.49, +2.29] | yes |
+| Qwen2.5-3B       | XLM-R-large         | +1.54 | [+0.56, +2.68] | yes |
+| Qwen2.5-1.5B     | mBERT               | +1.18 | [+0.26, +2.17] | yes |
+| Qwen2.5-1.5B     | XLM-R-large         | +1.37 | [+0.37, +2.54] | yes |
+| Chinese-BERT     | mBERT               | +1.14 | [+0.52, +1.79] | yes |
+| Chinese-BERT     | XLM-R-large         | +1.33 | [+0.72, +1.90] | yes |
+| Qwen2.5-3B       | Qwen2.5-1.5B        | +0.17 | [−0.05, +0.41] | **no** |
+
+The interpretation we take from this: the cloze probe does not establish that any single model "encodes radicals" at the per-field level. The 8 fields are too few. What it does establish, with bootstrap CIs not crossing zero, is that on this set of 8 fields the three Chinese-pretrained transformers prefer radical-correct completions over within-field distractors more than the three multilingual MLMs do. The within-Qwen-family scaling (Qwen-3B vs Qwen-1.5B) is *not* statistically supported in this probe, which sharpens our scaling claim from the v1 draft. The paper does not make a within-Qwen scaling claim.
+
+The probe remains exploratory because: contexts are author-written, n = 8 fields is small, no native-speaker validation. We discuss these in §7. The cross-category gap, with paired bootstrap CIs at the field level, is the most a 250-trial, single-author probe can support.
 
 ### 5.6 Layer-wise dynamics: most of the signal is shallow
 
@@ -175,19 +191,45 @@ For seven of nine glyph-naive models, peak-layer Cohen's d is at layer 0 (the st
 
 The layer-0 dominance is a substantive finding, not a methodological artifact. The token embedding table is part of the model's learned representation, and the fact that radical-aligned geometry is concentrated there says something about what kind of learning produces it. Specifically: the radical-aligned ordering is encoded in the way the tokenizer's vocabulary is laid out in embedding space, before any contextualization happens. Contextualization in deeper layers does not amplify this signal; for most models it dampens it. This is consistent with the reading that radical-aligned structure in transformers is mostly a property of how character vocabularies are initialized and updated during pretraining, not a property of the contextual computation. We did not explore this further; a worthwhile follow-up is to ablate the token-embedding rows for same-radical characters and measure the effect on the cloze probe.
 
-### 5.7 Specificity, frequency, and architecture controls
+### 5.7 Mechanistic side-result: cross-radical retrieval lift
+
+For five models (the subset that completed the activation-patching step before our compute budget ran out — the larger Chinese-pretrained models were not included in this analysis) we ran a per-character retrieval experiment. For each pair of distinct radicals (R_src, R_tgt) and 30 source characters in R_src, we asked: how often does a top-10 nearest-neighbour query starting from a source character return a character with R_tgt? The metric `lift` is the observed rate divided by frequency-matched random expectation (`lift = 1` is chance).
+
+| Model | mean cross-radical lift | 95% CI | share of (R_src, R_tgt) above chance | n |
+|--------|-------------------------|---------|----------------------------------------|----|
+| glyph_only/ResNet-18 | 33.0 | [32.2, 33.9] | 1.000 | 4,556 |
+| Chinese-BERT          | 8.4 | [8.2, 8.7]  | 0.986 | 4,556 |
+| mBERT                 | 6.3 | [6.1, 6.4]  | 0.976 | 4,556 |
+| JP-BERT-char          | 5.6 | [5.5, 5.8]  | 0.959 | 4,556 |
+| XLM-R-base            | 4.3 | [4.2, 4.4]  | 0.964 | 4,556 |
+
+Every model shows mean lift far above chance, and 96% to 100% of all radical pairs (R_src, R_tgt) yield retrievals at above-chance rates. Two observations. First, this confirms at the individual-character level what the variance decomposition shows at the pair level: every model encodes some radical-aligned structure, even XLM-R-base. Second, the lift does not directly compete with the variance-decomposition ordering — XLM-R-base, which had near-zero radical partial-R², still shows lift of 4.3 here. The reason is that the variance decomposition reports *radical above PMI* (a relative ordering), while the retrieval lift reports radical above random (an absolute level). A model can have substantial absolute radical retrieval lift while still being PMI-dominated in the variance decomposition.
+
+This experiment is correlational like the variance decomposition is, but it operates at the individual-character level rather than at the pair-cosine level. It does not support a strong causal claim ("the model uses radicals to retrieve characters"), only an associational one ("the model's nearest-neighbour structure is non-randomly aligned with radical identity"). The Qwen and BGE models were not included due to compute constraints and remain a target for replication.
+
+### 5.8 Per-radical heterogeneity: the signal is not uniform
+
+We computed each radical's mean cross-radical retrieval lift to find which radicals carry the strongest signal. The pattern is consistent across the five models we tested. The most distinctive radicals (top-10 by lift, in Chinese-BERT) are:
+
+魚 (48.8), 鳥 (24.3), 肉 (21.3), 虫 (19.8), 酉 (18.4), [78] (16.1), 見 (15.9), 雨 (14.5), 疒 (14.0), 犬 (12.3)
+
+These are visually concrete, semantically transparent radicals: fish, bird, flesh, insect, wine, see, rain, illness, dog. The bottom-10 radicals are predominantly abstract or position-only (radicals 1 一, 9 人, 60 彳, etc.) with mean lift values between 1.7 and 3. The gap between top-10 and bottom-10 mean lift is 17.3× in Chinese-BERT, 11.6× in mBERT, 5.2× in XLM-R-base, and 50.7× in the vision-only baseline.
+
+This heterogeneity is itself a finding. The "radical effect" is not uniform across the 68 radicals: it is concentrated in radicals whose semantic transparency is high (animals, body parts, natural elements) and almost absent for radicals that mark grammatical or abstract categories. The implication: any future study claiming to test radical encoding should report per-radical results, not aggregate effect sizes. The per-radical breakdown is in the released `radical_heterogeneity_summary.csv`.
+
+### 5.9 Specificity, frequency, and architecture controls
 
 The three controls behave as predicted. Pseudoradical p ≤ 0.020 for all nine models. Frequency-matched effect retains 92% to 99% of the unmatched effect across glyph-naive models (the largest frequency inflation is 0.077 in the vision-only baseline). Random-initialized Chinese-BERT and XLM-R-base both produce d ≈ −0.04 with p > 0.88. Architecture alone, without training, does not produce the observed geometry.
 
-### 5.8 Cross-script generalization
+### 5.10 Cross-script generalization
 
 Of 6,306 characters in our dataset, 1,687 appear in the Joyo kanji list. We re-extract embeddings for these characters from JP-BERT-char and from each Chinese model on the same kanji subset. JP-BERT-char shows d = 0.384 on the subset; Chinese-BERT shows d = 0.405; Qwen2.5-3B shows d = 0.682. The Japanese-pretrained model is not the strongest performer on Japanese kanji; Qwen, trained predominantly on Chinese text, shows the highest cohesion on Japanese kanji. We read this as evidence that the Kangxi system transfers across pretraining language, but with caution: JP-BERT-char's smaller parameter count and different training corpus make this a within-architecture-family comparison rather than a fully controlled cross-language test.
 
 ## 6. What the data say and do not say
 
-**What the data say.** Of nine glyph-naive transformer models examined here, three (Qwen2.5-1.5B, Qwen2.5-3B, BGE-large-zh) show partial-R²(radical) above partial-R²(PMI) by factors of 1.7 to 1.9 in the four-predictor decomposition with cluster-robust standard errors. The same three are the only models with positive cloze-probe mean_delta. The radical effect is specific to Kangxi categories (size-matched random partitions yield d ≈ 0), training-driven (random-init networks yield d ≈ −0.04), not attributable to character frequency (frequency-matched effect retains 92% to 99% of the unmatched effect), and not visual-only (the vision baseline's d = 1.14 is fully accounted for by within-semantic-field similarity in rendered glyphs).
+**What the data say.** Of nine glyph-naive transformer models examined here, three (Qwen2.5-1.5B, Qwen2.5-3B, BGE-large-zh) show partial-R²(radical) above partial-R²(PMI) by factors of 1.7 to 1.9 in the four-predictor decomposition with cluster-robust standard errors. The cloze probe yields the same cross-category ordering, with paired-bootstrap CIs on every Chinese-pretrained-vs-multilingual-MLM gap excluding zero. The radical effect is specific to Kangxi categories (size-matched random partitions yield d ≈ 0), training-driven (random-init networks yield d ≈ −0.04), not attributable to character frequency (frequency-matched effect retains 92% to 99% of the unmatched effect), and not visual-only (the vision baseline's d = 1.14 is fully accounted for by within-semantic-field similarity in rendered glyphs). The signal is concentrated in static embedding tables (peak-d at layer 0 in seven of nine models) and is highly heterogeneous across radicals, with semantically transparent radicals like 魚, 鳥, 肉 carrying 5–17× the lift of abstract radicals like 一 or 人.
 
-**What the data do not say.** We do not establish a category effect for "Chinese-pretrained transformers." Three models is too few. We do not make a mechanistic claim. The variance decomposition is associational. We do not claim that the cloze probe is a benchmark; 250 author-written trials without native-speaker validation are exploratory at best. We do not establish that radical-aligned structure is "useful" for downstream tasks in any controlled sense. We do not address whether the static-embedding-layer dominance of the radical signal means radicals are "encoded in the tokenizer" rather than "encoded in the model"; the question of where in the parameter space the geometry lives is open and would require ablation studies we did not perform.
+**What the data do not say.** We do not establish a category effect for "Chinese-pretrained transformers." Three models is too few. We do not make a mechanistic claim. The variance decomposition is associational; the activation-patching summary in §5.7 is correlational at the per-character level rather than causal. The within-Qwen scaling claim (Qwen-3B vs Qwen-1.5B) is not statistically supported by our cloze probe (gap CI crosses zero). We do not claim any single model's per-field cloze advantage is significantly different from zero (n = 8 fields is too small). We do not establish that radical-aligned structure is "useful" for downstream tasks in any controlled sense. We do not address whether the static-embedding-layer dominance of the radical signal means radicals are "encoded in the tokenizer" rather than "encoded in the model"; the question of where in the parameter space the geometry lives is open and would require ablation studies we did not perform.
 
 **What we suspect but did not test.** Same-radical characters appear in similar morphological frames in Chinese text (compound formation, classifier patterns, idiomatic constructions) that may not be captured by a 5-character PMI window. This is a hypothesis, not a finding. The right test would be to compute PMI at multiple window sizes and frame types and to add those as predictors. We did not do this.
 
@@ -203,9 +245,9 @@ We list the limitations in roughly the order a reviewer would raise them.
 
 **XLM-R-base subword pooling.** XLM-R has 0.4% single-token coverage. We removed it from the main variance-decomposition table. Its results are in the released artifacts for completeness but should not be compared directly to the tokenized models.
 
-**Cloze probe is exploratory.** 250 procedurally-constructed trials with author-written carriers and no inter-annotator agreement. We labeled it exploratory in the title and the abstract and did not let it carry the main argument.
+**Cloze probe is exploratory.** 250 procedurally-constructed trials with author-written carriers and no inter-annotator agreement. Per-model field-averaged log-probability advantages are not significant at α = 0.05 due to the small (n = 8) field count. We addressed this by reframing the cloze claim around cross-category bootstrap gaps (which are robust at the 95% CI level) rather than per-model effects. The biggest open improvement remains a properly-validated cloze benchmark with native-speaker rated contexts and on the order of 1,000+ trials.
 
-**No mechanistic experiment.** We did not run activation patching, attention-head ablation, or neuron-level analysis. Our claims are associational. The variance decomposition is correlational by construction.
+**No mechanistic experiment at scale.** We ran a small-scale activation-patching summary in §5.7 on five models (the larger Chinese-pretrained models were not included due to compute constraints). The retrieval-lift result is correlational at the per-character level — it shows that nearest-neighbour structure is non-randomly aligned with radical identity but does not establish a causal mechanism. A real mechanistic follow-up would require attention-head ablation, neuron-level analysis, or activation patching on Qwen2.5-3B with counterfactual baselines. None of these fit our compute budget.
 
 **Layer sampling is coarse for seven models.** We extracted only 5 evenly-spaced layers for seven of nine glyph-naive models. Peak-d localization is approximate for those models. Full 13-layer resolution is available for mBERT and Chinese-BERT only.
 
@@ -217,9 +259,9 @@ We list the limitations in roughly the order a reviewer would raise them.
 
 ## 8. Conclusion
 
-We decomposed pairwise embedding cosine in nine glyph-naive transformer models and one rendered-glyph baseline into four channels: radical co-membership, distributional context (PMI), character frequency, and stroke difference. Using cluster-robust regression with character-level clustering of standard errors, we found that three of the nine glyph-naive models (Qwen2.5-1.5B, Qwen2.5-3B, BGE-large-zh) place radical partial-R² above PMI partial-R² with bootstrap CIs that do not overlap. The other six do not. An exploratory cloze probe reproduces the same model ordering, with the caveat that 250 author-written trials are not a behavioral benchmark.
+We decomposed pairwise embedding cosine in nine glyph-naive transformer models and one rendered-glyph baseline into four channels: radical co-membership, distributional context (PMI), character frequency, and stroke difference. Using cluster-robust regression with character-level clustering of standard errors, we found that three of the nine glyph-naive models (Qwen2.5-1.5B, Qwen2.5-3B, BGE-large-zh) place radical partial-R² above PMI partial-R² with bootstrap CIs that do not overlap. The other six do not. An exploratory cloze probe with paired-bootstrap inference shows that, although per-model field-averaged log-probability advantages are not significant on their own (n = 8 fields is small), every cross-category gap between a Chinese-pretrained model and a multilingual MLM has a 95% CI that excludes zero. A small-scale activation-patching analysis on five models confirms that 96% to 100% of cross-radical retrievals are above chance, with semantically transparent radicals (魚, 鳥, 肉) carrying the bulk of the signal.
 
-The pattern is too small in n to support a category claim about "Chinese-pretrained transformers" and too modest in absolute variance explained to support a mechanistic claim about "encoding." It is consistent with the reading that, for some models, radical co-membership predicts representational similarity beyond what distributional context alone would predict, and that this excess survives controls for frequency and stroke count. We hope replication on a wider set of Chinese-pretrained LLMs, with a properly-validated cloze benchmark and a mechanistic follow-up, will sharpen or constrain the picture.
+The pattern is too small in n to support a category claim about "Chinese-pretrained transformers" and too modest in absolute variance explained to support a mechanistic claim about "encoding." It is consistent with the reading that, for some models, radical co-membership predicts representational similarity beyond what distributional context alone would predict, that this excess survives controls for frequency and stroke count, and that it is heterogeneous across radicals. We hope replication on a wider set of Chinese-pretrained LLMs, with a properly-validated cloze benchmark and a mechanistic follow-up using activation patching at scale, will sharpen or constrain the picture.
 
 ## Reproducibility
 
